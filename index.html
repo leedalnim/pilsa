@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="robots" content="noindex, nofollow" />
 <title>필사 — 타이핑 연습</title>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -792,27 +793,55 @@
     $("msg").className = "msg ok"; $("msg").textContent = "진행 기록을 지웠습니다. 처음부터 다시 시작합니다.";
   });
 
-  buildOrder();
-  (function restoreProgress() {
-    const prog = loadProgress();
-    let restoredTyped = "";
-    if (prog) {
-      if (Array.isArray(prog.done)) doneSet = new Set(prog.done.filter(i => typeof i === "number" && i >= 0 && i < sentences.length));
-      if (typeof prog.pos === "number") { const oi = order.indexOf(prog.pos); if (oi >= 0) orderIdx = oi; }
-      if (typeof prog.typed === "string") restoredTyped = prog.typed;
-    }
-    resetCurrent();
-    if (restoredTyped && restoredTyped.length <= current().text.length) {
-      capture.value = restoredTyped; render();
-    }
-    if (prog && (orderIdx > 0 || doneSet.size > 0 || restoredTyped)) {
-      showToast("이어서 읽는 중 · " + (orderIdx + 1) + "번째 장면" + (doneSet.size ? " · 완독 " + doneSet.size : ""));
-    }
-  })();
-  rebuildMinimap();
-  if (document.fonts && document.fonts.ready) document.fonts.ready.then(rebuildMinimap);
-  setTimeout(() => capture.focus(), 100);
-  setTimeout(rebuildMinimap, 300);
+  function hasStoredSentences() {
+    try {
+      const raw = localStorage.getItem(LS_KEY);
+      if (raw) { const p = JSON.parse(raw); return Array.isArray(p) && p.length > 0; }
+    } catch (e) {}
+    return false;
+  }
+
+  function init() {
+    buildOrder();
+    (function restoreProgress() {
+      const prog = loadProgress();
+      let restoredTyped = "";
+      if (prog) {
+        if (Array.isArray(prog.done)) doneSet = new Set(prog.done.filter(i => typeof i === "number" && i >= 0 && i < sentences.length));
+        if (typeof prog.pos === "number") { const oi = order.indexOf(prog.pos); if (oi >= 0) orderIdx = oi; }
+        if (typeof prog.typed === "string") restoredTyped = prog.typed;
+      }
+      resetCurrent();
+      if (restoredTyped && restoredTyped.length <= current().text.length) {
+        capture.value = restoredTyped; render();
+      }
+      if (prog && (orderIdx > 0 || doneSet.size > 0 || restoredTyped)) {
+        showToast("이어서 읽는 중 · " + (orderIdx + 1) + "번째 장면" + (doneSet.size ? " · 완독 " + doneSet.size : ""));
+      }
+    })();
+    rebuildMinimap();
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(rebuildMinimap);
+    setTimeout(() => capture.focus(), 100);
+    setTimeout(rebuildMinimap, 300);
+  }
+
+  // 이 브라우저에 저장된 데이터가 없으면(=새 기기/브라우저) 같은 폴더의 sentences.json을
+  // 불러와 시작한다. 설정창에서 직접 붙여넣어 편집한 데이터가 있으면 그쪽을 우선한다.
+  // 파일이 없거나 file://로 열어 fetch가 실패하면 조용히 기본 안내 문장으로 시작한다.
+  if (hasStoredSentences()) {
+    init();
+  } else {
+    fetch("sentences.json", { cache: "no-store" })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (Array.isArray(data)) {
+          const norm = normalize(data);
+          if (norm.length) sentences = norm;
+        }
+      })
+      .catch(() => {})
+      .finally(init);
+  }
 })();
 </script>
 </body>
