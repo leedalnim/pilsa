@@ -1,0 +1,819 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>필사 — 타이핑 연습</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@400;500;600&family=Gowun+Batang:wght@400;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --ink:        #14171f;
+    --ink-2:      #1b1f2a;
+    --paper:      #f4ecdc;
+    --paper-dim:  #cbc2af;
+    --paper-mute: #8c8676;
+    --gold:       #c9a45c;
+    --green:      #6fae6a;
+    --red:        #d4675f;
+    --composing:  #e8dcc0;
+    --line:       rgba(244,236,220,0.10);
+    --serif: 'Noto Serif KR', 'Gowun Batang', serif;
+    --mono: 'JetBrains Mono', monospace;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    background: radial-gradient(120% 80% at 50% -10%, #20242f 0%, var(--ink) 55%, #0f1219 100%);
+    background-attachment: fixed;
+    color: var(--paper);
+    font-family: var(--mono);
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+  }
+  body::before {
+    content: ""; position: fixed; inset: 0; pointer-events: none;
+    opacity: 0.035; z-index: 0;
+    background-image: repeating-linear-gradient(0deg, #fff 0, #fff 1px, transparent 1px, transparent 3px);
+    mix-blend-mode: overlay;
+  }
+
+  /* ---- 상단 고정 바 ---- */
+  .topbar {
+    position: sticky; top: 0; z-index: 20;
+    background: rgba(20,23,31,0.82);
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--line);
+  }
+  .topbar-row {
+    width: min(820px, 92vw); margin: 0 auto;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .topbar-row.r1 { padding: 14px 0 8px; }
+  .topbar-row.r2 { padding-bottom: 12px; font-size: 11px; letter-spacing: 0.16em; color: var(--paper-mute); text-transform: uppercase; }
+  .brand { display: flex; align-items: baseline; gap: 13px; }
+  .brand h1 { font-family: var(--serif); font-weight: 600; font-size: 20px; letter-spacing: 0.18em; color: var(--paper); }
+  .brand .sub { font-size: 10px; letter-spacing: 0.32em; text-transform: uppercase; color: var(--paper-mute); }
+  .top-actions { display: flex; gap: 8px; }
+  .icon-btn {
+    background: transparent; border: 1px solid var(--line); color: var(--paper-dim);
+    width: 34px; height: 34px; border-radius: 8px; cursor: pointer; font-size: 15px;
+    display: grid; place-items: center; transition: all .18s ease;
+  }
+  .icon-btn:hover { border-color: var(--gold); color: var(--gold); }
+  .topbar-row.r2 .source { color: var(--gold); font-family: var(--serif); text-transform: none; letter-spacing: 0.03em; font-size: 14px; }
+  .topbar-row.r2 .charinfo { font-variant-numeric: tabular-nums; letter-spacing: 0.1em; }
+  .progress-track { height: 2px; background: var(--line); width: 100%; }
+  .progress-bar { height: 100%; width: 0%; background: linear-gradient(90deg, var(--gold), #e6c987); transition: width .12s ease; }
+
+  /* ---- 본문 ---- */
+  main {
+    position: relative; z-index: 1;
+    display: flex; flex-direction: column; align-items: center;
+    gap: 20px; padding: 40px 24px 60px;
+  }
+
+  .card {
+    width: min(820px, 92vw); position: relative;
+    background: linear-gradient(180deg, rgba(244,236,220,0.045), rgba(244,236,220,0.02));
+    border: 1px solid var(--line); border-radius: 16px;
+    padding: 46px 50px;
+    box-shadow: 0 30px 80px -40px rgba(0,0,0,0.8), inset 0 1px 0 rgba(255,255,255,0.04);
+    overflow: hidden;
+  }
+  #display {
+    font-family: var(--serif); font-weight: 400;
+    font-size: clamp(19px, 2.5vw, 25px); line-height: 2.05; letter-spacing: 0.01em;
+    white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word;
+    max-width: 100%; min-height: 2em; user-select: none;
+  }
+  #display .ch { position: relative; transition: color .08s ease; }
+  #display .pending  { color: var(--paper-mute); }
+  #display .correct  { color: var(--paper); }
+  #display .wrong    { color: var(--red); text-decoration: underline; text-decoration-color: rgba(212,103,95,.5); text-underline-offset: 6px; }
+  #display .composing{ color: var(--composing); }
+  #display .extra    { color: var(--red); opacity: .85; }
+  #display .cursor::before {
+    content: ""; position: absolute; left: -2px; top: 0.14em; bottom: 0.14em;
+    width: 2px; background: var(--gold); animation: blink 1s steps(1) infinite;
+  }
+  @keyframes blink { 50% { opacity: 0; } }
+
+  /* 키 입력만 받는 투명 입력창 — 가로/세로 스크롤 모두 숨김 */
+  #capture {
+    position: absolute; inset: 0; width: 100%; height: 100%;
+    opacity: 0; border: 0; resize: none;
+    background: transparent; color: transparent; caret-color: transparent;
+    font: inherit; padding: 46px 50px; cursor: text;
+    overflow: hidden; white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word;
+  }
+
+  /* ---- 하단: 통계 + 미니맵 한 줄 ---- */
+  .bottom {
+    width: min(820px, 92vw);
+    display: flex; gap: 12px; align-items: stretch;
+  }
+  .minimap {
+    position: relative; flex-shrink: 0; width: 150px; min-height: 104px; max-height: 132px;
+    background: var(--ink-2);
+    border: 1px solid var(--line); border-radius: 12px;
+    padding: 10px 10px 11px; cursor: pointer;
+    transition: border-color .18s ease;
+    display: flex; flex-direction: column;
+  }
+  .minimap:hover { border-color: rgba(201,164,92,0.6); }
+  .minimap-label { font-size: 9px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--gold); text-align: center; margin-bottom: 7px; }
+  .minimap-scroll {
+    flex: 1; min-height: 0; overflow-y: auto; position: relative;
+  }
+  .minimap-scroll::-webkit-scrollbar { width: 5px; }
+  .minimap-scroll::-webkit-scrollbar-thumb { background: rgba(201,164,92,0.4); border-radius: 5px; }
+  .minimap-scroll::-webkit-scrollbar-track { background: transparent; }
+  .minimap-inner { position: relative; width: 100%; min-height: 14px; margin: 0 auto; }
+  .mini-line {
+    position: absolute; border-radius: 1.5px;
+    background: var(--paper-mute); opacity: 0.3;
+  }
+  .mini-line.done { background: var(--gold); opacity: 0.85; }
+  .mini-line.current { background: #e6c987; opacity: 1; box-shadow: 0 0 0 1.5px rgba(230,201,135,0.45); }
+  @media (max-width: 720px) {
+    .bottom { flex-direction: column; align-items: stretch; }
+    .minimap { width: 100%; min-height: 0; max-height: 128px; }
+  }
+
+  .stats {
+    flex: 1; min-width: 0;
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px;
+    background: var(--line); border: 1px solid var(--line); border-radius: 12px; overflow: hidden;
+  }
+  .stat { background: var(--ink-2); padding: 14px; text-align: center; display: flex; flex-direction: column; justify-content: center; }
+  .stat .val { font-family: var(--mono); font-weight: 700; font-size: 24px; color: var(--paper); font-variant-numeric: tabular-nums; }
+  .stat .val small { font-size: 12px; color: var(--paper-mute); font-weight: 500; margin-left: 3px; }
+  .stat .lbl { margin-top: 4px; font-size: 10px; letter-spacing: 0.22em; text-transform: uppercase; color: var(--paper-mute); }
+  .stat.accent .val { color: var(--gold); }
+
+  .controls { width: min(820px, 92vw); display: flex; align-items: center; justify-content: center; gap: 14px; flex-wrap: wrap; }
+  .btn {
+    font-family: var(--mono); font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase;
+    padding: 11px 20px; border-radius: 9px; border: 1px solid var(--line);
+    background: transparent; color: var(--paper-dim); cursor: pointer; transition: all .18s ease;
+  }
+  .btn:hover { border-color: var(--gold); color: var(--gold); }
+  .btn.solid { background: var(--gold); color: var(--ink); border-color: var(--gold); font-weight: 700; }
+  .btn.solid:hover { background: #e6c987; }
+  .hint { font-size: 11px; color: var(--paper-mute); letter-spacing: 0.06em; text-align: center; width: 100%; }
+  .hint kbd { font-family: var(--mono); background: var(--line); border-radius: 4px; padding: 1px 6px; color: var(--paper-dim); font-size: 10px; }
+
+  .card.done { border-color: var(--green); box-shadow: 0 30px 80px -40px rgba(0,0,0,0.8), 0 0 0 1px rgba(111,174,106,.3); }
+
+  /* ---- 모달 ---- */
+  .overlay {
+    position: fixed; inset: 0; z-index: 50; background: rgba(8,10,15,0.72);
+    backdrop-filter: blur(4px); display: none; align-items: center; justify-content: center; padding: 24px;
+  }
+  .overlay.open { display: flex; }
+  .modal {
+    width: min(720px, 100%); max-height: 88vh; overflow-y: auto;
+    background: var(--ink-2); border: 1px solid var(--line); border-radius: 16px; padding: 30px;
+  }
+  .modal h2 { font-family: var(--serif); font-size: 18px; letter-spacing: 0.1em; margin-bottom: 6px; }
+  .modal p { color: var(--paper-mute); font-size: 12px; line-height: 1.7; margin-bottom: 16px; }
+  .modal textarea {
+    width: 100%; min-height: 180px; background: var(--ink); border: 1px solid var(--line);
+    border-radius: 10px; color: var(--paper); font-family: var(--mono); font-size: 12px; line-height: 1.6; padding: 14px; resize: vertical;
+  }
+  .modal textarea:focus { outline: none; border-color: var(--gold); }
+  .modal-actions { display: flex; gap: 10px; margin-top: 16px; flex-wrap: wrap; }
+  .schema {
+    background: var(--ink); border: 1px solid var(--line); border-radius: 8px; padding: 12px;
+    font-size: 11px; color: var(--paper-dim); white-space: pre; overflow-x: auto; margin-bottom: 16px;
+  }
+  .msg { font-size: 12px; margin-top: 10px; min-height: 16px; }
+  .msg.ok { color: var(--green); }
+  .msg.err { color: var(--red); }
+  .toast {
+    position: fixed; left: 50%; bottom: 28px; transform: translateX(-50%) translateY(12px);
+    background: var(--ink-2); border: 1px solid var(--gold); color: var(--paper);
+    font-size: 13px; letter-spacing: 0.02em; padding: 11px 18px; border-radius: 10px;
+    box-shadow: 0 8px 30px rgba(0,0,0,0.45); opacity: 0; pointer-events: none;
+    transition: opacity .3s ease, transform .3s ease; z-index: 60; max-width: 86vw; text-align: center;
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  .modal h3.modal-sec { font-family: var(--serif); font-size: 14px; letter-spacing: 0.06em; color: var(--gold); margin: 4px 0 8px; }
+  .field-row { display: flex; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; }
+  .t-input { flex: 1; min-width: 140px; background: var(--ink); border: 1px solid var(--line); border-radius: 10px; color: var(--paper); font-family: var(--serif); font-size: 13px; padding: 11px 13px; }
+  .t-input:focus { outline: none; border-color: var(--gold); }
+  .chk { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--paper-mute); margin-top: 12px; cursor: pointer; }
+  .chk input { accent-color: var(--gold); width: 15px; height: 15px; }
+  .divider { height: 1px; background: var(--line); margin: 26px 0; }
+
+  @media (max-width: 600px) {
+    .card { padding: 32px 24px; }
+    #capture { padding: 32px 24px; }
+    .stats { grid-template-columns: repeat(2, 1fr); }
+    .brand .sub { display: none; }
+    .topbar-row.r2 .source { display: none; }
+  }
+</style>
+</head>
+<body>
+  <!-- 상단 고정 바: 스크롤해도 진행 상황 / 전체보기 항상 노출 -->
+  <div class="topbar">
+    <div class="topbar-row r1">
+      <div class="brand"><h1>필사</h1><span class="sub">typing&nbsp;archive</span></div>
+      <div class="top-actions">
+        <button class="icon-btn" id="shuffleBtn" title="순서 / 랜덤 전환">⇄</button>
+        <button class="icon-btn" id="settingsBtn" title="문장 데이터 관리">⚙</button>
+      </div>
+    </div>
+    <div class="topbar-row r2">
+      <span id="counter">문단 1 / 1</span>
+      <span class="source" id="source"></span>
+      <span class="charinfo"><span id="charCount">0 / 0</span> · <span id="percent">0%</span></span>
+    </div>
+    <div class="progress-track"><div class="progress-bar" id="progress"></div></div>
+  </div>
+
+  <main>
+    <div class="card" id="card">
+      <div id="display"></div>
+      <textarea id="capture" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false"></textarea>
+    </div>
+
+    <div class="bottom">
+      <div class="stats">
+        <div class="stat accent"><div class="val" id="cpm">0<small>타/분</small></div><div class="lbl">속도</div></div>
+        <div class="stat"><div class="val" id="acc">100<small>%</small></div><div class="lbl">정확도</div></div>
+        <div class="stat"><div class="val" id="time">0.0<small>초</small></div><div class="lbl">시간</div></div>
+        <div class="stat"><div class="val" id="strokes">0</div><div class="lbl">누적 타수</div></div>
+      </div>
+      <div class="minimap" id="minimap" title="현재 위치 — 클릭하면 이동">
+        <div class="minimap-label" id="miniLabel">미리보기</div>
+        <div class="minimap-scroll" id="miniScroll"><div class="minimap-inner" id="miniInner"></div></div>
+      </div>
+    </div>
+
+    <div class="controls">
+      <button class="btn" id="prevBtn">◂ 이전</button>
+      <button class="btn solid" id="nextBtn">다음 ▸</button>
+      <button class="btn" id="retryBtn">다시</button>
+      <div class="hint"><kbd>Enter</kbd> 완료 시 다음 · <kbd>Esc</kbd> 현재 다시 · <kbd>Tab</kbd> 입력창 포커스</div>
+    </div>
+  </main>
+
+  <!-- settings modal -->
+  <div class="overlay" id="overlay">
+    <div class="modal">
+      <h2>문장 데이터 관리</h2>
+
+      <h3 class="modal-sec">글 본문으로 추가</h3>
+      <p>기사·에세이 등 글 본문을 그대로 붙여넣고 제목·작가만 적으면, <b>빈 줄(엔터 두 번)</b>을 기준으로 장면을 나눠 자동 등록합니다. JSON을 몰라도 됩니다.</p>
+      <div class="field-row">
+        <input id="srcTitle" class="t-input" placeholder="제목 (예: 복 있는 자들)" autocomplete="off" autocapitalize="off" spellcheck="false">
+        <input id="srcAuthor" class="t-input" placeholder="작가 (예: 길란)" autocomplete="off" autocapitalize="off" spellcheck="false">
+      </div>
+      <textarea id="bodyInput" placeholder="여기에 글 본문을 붙여넣으세요.
+
+빈 줄(엔터 두 번)로 장면이 나뉩니다."></textarea>
+      <label class="chk"><input type="checkbox" id="appendChk" checked> 기존 데이터에 이어붙이기 (체크 해제 시 전체 교체)</label>
+      <div class="modal-actions">
+        <button class="btn solid" id="addTextBtn">본문으로 추가</button>
+      </div>
+
+      <div class="divider"></div>
+
+      <h3 class="modal-sec">JSON으로 관리</h3>
+      <p>노션에서 받은 JSON을 붙여넣고 <b>불러오기</b>를 누르세요. 데이터는 이 브라우저에 저장되어 다음에 열어도 유지됩니다. 장면 안의 줄바꿈은 자동으로 공백으로 합쳐져 한 문단으로 이어지므로, 줄바꿈을 직접 칠 필요가 없습니다.</p>
+      <div class="schema">[
+  { "text": "긴 문단 텍스트...", "source": "출처 (선택)" },
+  { "text": "다음 문단...", "source": "" }
+]</div>
+      <textarea id="jsonInput" placeholder='여기에 JSON 붙여넣기...'></textarea>
+      <div class="modal-actions">
+        <button class="btn solid" id="loadBtn">불러오기</button>
+        <button class="btn" id="exportBtn">현재 문장 복사</button>
+      </div>
+
+      <div class="msg" id="msg"></div>
+      <div class="modal-actions">
+        <button class="btn" id="clearProgBtn">진행 기록 지우기</button>
+        <button class="btn" id="resetBtn">기본값 복원</button>
+        <button class="btn" id="closeBtn">닫기</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+
+<script>
+(function () {
+  "use strict";
+
+  const DEFAULT_SENTENCES = [{"text": "여기는 필사로 천천히 읽어 나가는 공간입니다. 설정 버튼을 열어 좋아하는 글의 본문을 붙여넣으면, 빈 줄을 기준으로 장면이 나뉘어 연습이 시작됩니다.", "source": "필사"}, {"text": "한 글자씩 따라 적다 보면, 빠르게 지나쳤던 문장도 손끝에서 다시 천천히 흐릅니다. 오늘은 어떤 글을 옮겨 적어 볼까요.", "source": "필사"}, {"text": "준비가 되면 이 안내 문장을 지우고 당신의 책을 불러오세요. 읽은 만큼 미리보기에 금빛으로 쌓이고, 다음에 열면 그 자리에서 이어집니다.", "source": "필사"}];
+
+  const CHO = ["ㄱ","ㄲ","ㄴ","ㄷ","ㄸ","ㄹ","ㅁ","ㅂ","ㅃ","ㅅ","ㅆ","ㅇ","ㅈ","ㅉ","ㅊ","ㅋ","ㅌ","ㅍ","ㅎ"];
+  const JUNG = ["ㅏ","ㅐ","ㅑ","ㅒ","ㅓ","ㅔ","ㅕ","ㅖ","ㅗ","ㅘ","ㅙ","ㅚ","ㅛ","ㅜ","ㅝ","ㅞ","ㅟ","ㅠ","ㅡ","ㅢ","ㅣ"];
+  const JONG = ["","ㄱ","ㄲ","ㄳ","ㄴ","ㄵ","ㄶ","ㄷ","ㄹ","ㄺ","ㄻ","ㄼ","ㄽ","ㄾ","ㄿ","ㅀ","ㅁ","ㅂ","ㅄ","ㅅ","ㅆ","ㅇ","ㅈ","ㅊ","ㅋ","ㅌ","ㅍ","ㅎ"];
+  const JUNG_STROKES = { "ㅘ":2,"ㅙ":2,"ㅚ":2,"ㅝ":2,"ㅞ":2,"ㅟ":2,"ㅢ":2 };
+  const JONG_STROKES = { "ㄳ":2,"ㄵ":2,"ㄶ":2,"ㄺ":2,"ㄻ":2,"ㄼ":2,"ㄽ":2,"ㄾ":2,"ㄿ":2,"ㅀ":2,"ㅄ":2 };
+
+  function charStrokes(ch) {
+    const code = ch.charCodeAt(0);
+    if (code >= 0xAC00 && code <= 0xD7A3) {
+      const s = code - 0xAC00;
+      const jung = Math.floor((s % 588) / 28);
+      const jong = s % 28;
+      let n = 1;
+      n += JUNG_STROKES[JUNG[jung]] || 1;
+      if (jong !== 0) n += JONG_STROKES[JONG[jong]] || 1;
+      return n;
+    }
+    return 1;
+  }
+  function decompose(ch) {
+    const code = ch.charCodeAt(0);
+    if (code >= 0xAC00 && code <= 0xD7A3) {
+      const s = code - 0xAC00;
+      const cho = Math.floor(s / 588);
+      const jung = Math.floor((s % 588) / 28);
+      const jong = s % 28;
+      const arr = [CHO[cho], JUNG[jung]];
+      if (jong !== 0) arr.push(JONG[jong]);
+      return arr;
+    }
+    return [ch];
+  }
+  // 따옴표류 정규화: 둥근따옴표(" " ' ')와 곧은따옴표(" ')를 같은 글자로 취급
+  const DQUOTES = "\u0022\u201C\u201D\u201E\u201F\u2033\u2036\u02BA\u3003\uFF02\u301D\u301E\u275D\u275E";
+  const SQUOTES = "\u0027\u2018\u2019\u201A\u201B\u2032\u2035\u02B9\u02BB\u02BC\u0060\u00B4\uFF07\u275B\u275C";
+  function nc(ch) {
+    if (DQUOTES.indexOf(ch) !== -1) return '"';
+    if (SQUOTES.indexOf(ch) !== -1) return "'";
+    return ch;
+  }
+  function eqc(a, b) { return nc(a) === nc(b); }
+  function nstr(s) { let o = ""; for (const ch of s) o += nc(ch); return o; }
+
+  function isProgressingTo(inputCh, targetCh) {
+    if (eqc(inputCh, targetCh)) return true;
+    const a = decompose(inputCh).join("");
+    const b = decompose(targetCh).join("");
+    return b.startsWith(a) || a.startsWith(b.slice(0, a.length));
+  }
+
+  const LS_KEY = "pilsa-sentences";
+  const PROG_KEY = "pilsa-progress";
+  let sentences = loadSentences();
+  let order = [], orderIdx = 0, shuffle = false;
+  let doneSet = new Set();
+  let composing = false, startTime = null, timerId = null, totalStrokes = 0, finished = false;
+
+  const $ = (id) => document.getElementById(id);
+  const display = $("display");
+  const capture = $("capture");
+  const card = $("card");
+  const topbar = document.querySelector(".topbar");
+  const minimap = $("minimap");
+  const miniInner = $("miniInner");
+  const miniScroll = $("miniScroll");
+  let miniScale = 1;
+
+  function loadSentences() {
+    try {
+      const raw = localStorage.getItem(LS_KEY);
+      if (raw) { const p = JSON.parse(raw); if (Array.isArray(p) && p.length) return normalize(p); }
+    } catch (e) {}
+    return DEFAULT_SENTENCES.slice();
+  }
+  function normalize(arr) {
+    return arr.map((x) => {
+      if (typeof x === "string") return { text: x, source: "" };
+      return { text: String(x.text || "").replace(/\r\n/g, "\n").replace(/[ \t]*\n[ \t]*/g, " ").replace(/[ \t]{2,}/g, " ").trim(), source: String(x.source || "").trim() };
+    }).filter((x) => x.text.length > 0);
+  }
+  function saveSentences() { try { localStorage.setItem(LS_KEY, JSON.stringify(sentences)); } catch (e) {} }
+
+  // ---- 진행(중간 저장) ----
+  function saveProgress() {
+    try {
+      localStorage.setItem(PROG_KEY, JSON.stringify({
+        pos: order[orderIdx], typed: capture.value,
+        done: [...doneSet], shuffle: shuffle, ts: Date.now()
+      }));
+    } catch (e) {}
+  }
+  function loadProgress() {
+    try { const r = localStorage.getItem(PROG_KEY); return r ? JSON.parse(r) : null; }
+    catch (e) { return null; }
+  }
+  function clearProgress() {
+    doneSet = new Set();
+    try { localStorage.removeItem(PROG_KEY); } catch (e) {}
+  }
+  let _saveTimer = null;
+  function scheduleSaveProgress() {
+    if (_saveTimer) return;
+    _saveTimer = setTimeout(() => { _saveTimer = null; saveProgress(); }, 600);
+  }
+  function showToast(text) {
+    const t = $("toast"); if (!t) return;
+    t.textContent = text; t.classList.add("show");
+    clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove("show"), 2800);
+  }
+
+  function buildOrder() {
+    order = sentences.map((_, i) => i);
+    if (shuffle) for (let i = order.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [order[i], order[j]] = [order[j], order[i]]; }
+    orderIdx = 0;
+  }
+  function current() { return sentences[order[orderIdx]]; }
+
+  function render() {
+    const target = current().text;
+    const typed = capture.value;
+    let html = "";
+    for (let i = 0; i < target.length; i++) {
+      const tgt = target[i];
+      const safe = escapeHtml(tgt === " " ? "\u00A0" : tgt);
+      if (i < typed.length) {
+        const inp = typed[i];
+        const isLast = i === typed.length - 1;
+        let cls;
+        if (composing && isLast) cls = isProgressingTo(inp, tgt) ? "composing" : "wrong";
+        else cls = eqc(inp, tgt) ? "correct" : "wrong";
+        html += '<span class="ch ' + cls + '">' + escapeHtml(inp === " " ? "\u00A0" : inp) + '</span>';
+      } else if (i === typed.length) {
+        html += '<span class="ch pending cursor">' + safe + '</span>';
+      } else {
+        html += '<span class="ch pending">' + safe + '</span>';
+      }
+    }
+    if (typed.length > target.length) {
+      for (let i = target.length; i < typed.length; i++) {
+        html += '<span class="ch extra">' + escapeHtml(typed[i] === " " ? "\u00A0" : typed[i]) + '</span>';
+      }
+    }
+    display.innerHTML = html;
+    autoScroll();
+    updateMinimap();
+    updateStats();
+    checkDone();
+  }
+  function escapeHtml(s) { return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
+
+  /* 페이지(window) 스크롤로 현재 위치 추적 — 상단 고정바에 가리지 않게 */
+  function autoScroll() {
+    const cur = display.querySelector(".cursor");
+    if (!cur) return;
+    const rect = cur.getBoundingClientRect();
+    const headH = topbar.offsetHeight;
+    const viewH = window.innerHeight;
+    if (rect.top < headH + 50 || rect.bottom > viewH - 90) {
+      const targetY = window.scrollY + rect.top - (headH + (viewH - headH) / 2);
+      window.scrollTo({ top: Math.max(0, targetY), behavior: "smooth" });
+    }
+  }
+
+  /* 미니맵: 보내준 데이터 전체(모든 문단)를 줄 막대로 쌓고, 현재 치는 위치만 강조 */
+  let paraData = null;   // 문단별 줄 구조 측정 캐시
+  let totalBodyW = 0;
+  const measurer = document.createElement("div");
+  measurer.setAttribute("aria-hidden", "true");
+  measurer.style.cssText = "position:absolute;left:-99999px;top:0;visibility:hidden;pointer-events:none;";
+  document.body.appendChild(measurer);
+
+  // 모든 문단을 본문과 같은 폭/폰트로 측정해 줄 구조를 추출
+  function measureLines() {
+    const cs = getComputedStyle(display);
+    const w = display.clientWidth;
+    if (!w) return null;
+    measurer.style.width = w + "px";
+    measurer.style.fontFamily = cs.fontFamily;
+    measurer.style.fontSize = cs.fontSize;
+    measurer.style.fontWeight = cs.fontWeight;
+    measurer.style.lineHeight = cs.lineHeight;
+    measurer.style.letterSpacing = cs.letterSpacing;
+    measurer.style.whiteSpace = "pre-wrap";
+    measurer.style.overflowWrap = "anywhere";
+    measurer.style.wordBreak = "break-word";
+    totalBodyW = w;
+
+    const data = [];
+    for (let si = 0; si < sentences.length; si++) {
+      const text = sentences[si].text;
+      let html = "";
+      for (let i = 0; i < text.length; i++) {
+        html += '<span class="ch">' + escapeHtml(text[i] === " " ? "\u00A0" : text[i]) + "</span>";
+      }
+      measurer.innerHTML = html;
+      const spans = measurer.querySelectorAll(".ch");
+      const lines = [];
+      let cur = null;
+      spans.forEach((sp, idx) => {
+        const top = sp.offsetTop;
+        if (!cur || top - cur.top > 2) {
+          cur = { top: top, h: sp.offsetHeight, left: sp.offsetLeft, right: sp.offsetLeft + sp.offsetWidth, start: idx, end: idx };
+          lines.push(cur);
+        } else {
+          cur.right = sp.offsetLeft + sp.offsetWidth;
+          cur.h = Math.max(cur.h, sp.offsetHeight);
+          cur.end = idx;
+        }
+      });
+      data.push({ lines: lines, height: measurer.scrollHeight });
+    }
+    return data;
+  }
+
+  function rebuildMinimap() {
+    paraData = measureLines();
+    updateMinimap();
+  }
+
+  function updateMinimap() {
+    if (getComputedStyle(minimap).display === "none") return;
+    if (!paraData || !totalBodyW) return;
+
+    const lineH = parseFloat(getComputedStyle(display).lineHeight) || 30;
+    const paraGap = lineH * 0.8;
+
+    let totalH = 0;
+    for (let i = 0; i < paraData.length; i++) {
+      totalH += paraData[i].height;
+      if (i < paraData.length - 1) totalH += paraGap;
+    }
+    if (totalH <= 0) return;
+
+    const innerW = miniScroll.clientWidth || (minimap.clientWidth - 20);
+    let scale = innerW / totalBodyW;   // 폭 기준 — 막대 크기 일정
+    if (window.innerWidth <= 720) scale = Math.min(scale, 0.2); // 모바일은 더 축소
+    miniScale = scale;
+    miniInner.style.width = (totalBodyW * scale) + "px";
+    miniInner.style.height = (totalH * scale) + "px";
+    miniInner._paraGap = paraGap;
+
+    const curPara = order[orderIdx];   // 강조할 문단(원본 인덱스)
+    const typedLen = Math.min(capture.value.length, current().text.length);
+
+    let yAcc = 0;
+    let html = "";
+    for (let pIdx = 0; pIdx < paraData.length; pIdx++) {
+      const p = paraData[pIdx];
+      for (let li = 0; li < p.lines.length; li++) {
+        const ln = p.lines[li];
+        let cls = doneSet.has(pIdx) ? "done" : "left";
+        if (pIdx === curPara) {
+          if (ln.end < typedLen) cls = "done";
+          else if (ln.start <= typedLen && typedLen <= ln.end) cls = "current";
+          else cls = doneSet.has(pIdx) ? "done" : "left";
+        }
+        const left = ln.left * scale;
+        const top = (yAcc + ln.top) * scale;
+        const w = Math.max(3, (ln.right - ln.left) * scale);
+        const h = Math.max(2.5, ln.h * scale * 0.5);
+        const off = (ln.h * scale - h) / 2;
+        html += '<div class="mini-line ' + cls + '" style="left:' + left + 'px;top:' + (top + off) + 'px;width:' + w + 'px;height:' + h + 'px"></div>';
+      }
+      yAcc += p.height + paraGap;
+    }
+    miniInner.innerHTML = html;
+
+    // 현재 줄이 미니맵 보이는 범위를 벗어나면 가운데로 스크롤
+    const curEl = miniInner.querySelector(".mini-line.current");
+    if (curEl) {
+      const top = curEl.offsetTop, bot = top + curEl.offsetHeight;
+      const vTop = miniScroll.scrollTop, vBot = vTop + miniScroll.clientHeight;
+      if (top < vTop + 4 || bot > vBot - 4) {
+        miniScroll.scrollTop = Math.max(0, top - miniScroll.clientHeight / 2);
+      }
+    }
+  }
+
+  // 미니맵 클릭 → 해당 문단으로 점프
+  minimap.addEventListener("click", (e) => {
+    if (!paraData) return;
+    const innerRect = miniScroll.getBoundingClientRect();
+    const y = e.clientY - innerRect.top + miniScroll.scrollTop;
+    if (y < 0) { capture.focus(); return; }
+    const scale = miniScale || 1;
+    const paraGap = miniInner._paraGap || 0;
+    const bodyY = y / scale;
+    let acc = 0, pIdx = paraData.length - 1;
+    for (let i = 0; i < paraData.length; i++) {
+      const block = paraData[i].height + (i < paraData.length - 1 ? paraGap : 0);
+      if (bodyY < acc + block) { pIdx = i; break; }
+      acc += block;
+    }
+    const oi = order.indexOf(pIdx);
+    if (oi >= 0 && oi !== orderIdx) { orderIdx = oi; resetCurrent(); }
+    else capture.focus();
+  });
+
+  // 리사이즈 시 줄바꿈이 달라지므로 전체 다시 측정
+  let rafPending = false;
+  window.addEventListener("resize", () => {
+    if (rafPending) return;
+    rafPending = true;
+    requestAnimationFrame(() => { rafPending = false; rebuildMinimap(); });
+  });
+
+  function correctStrokesInCurrent() {
+    const target = current().text;
+    const typed = capture.value;
+    let n = 0;
+    const upto = Math.min(typed.length, target.length);
+    for (let i = 0; i < upto; i++) {
+      if (composing && i === typed.length - 1) break;
+      if (eqc(typed[i], target[i])) n += charStrokes(target[i]);
+    }
+    return n;
+  }
+  function updateStats() {
+    const target = current().text;
+    const typed = capture.value;
+    let correct = 0, counted = 0;
+    const upto = Math.min(typed.length, target.length);
+    for (let i = 0; i < upto; i++) {
+      if (composing && i === typed.length - 1) break;
+      counted++;
+      if (eqc(typed[i], target[i])) correct++;
+    }
+    counted += Math.max(0, typed.length - target.length);
+    const acc = counted === 0 ? 100 : Math.round((correct / counted) * 100);
+    $("acc").innerHTML = acc + '<small>%</small>';
+
+    const typedLen = Math.min(typed.length, target.length);
+    const prog = target.length === 0 ? 0 : Math.min(100, (typedLen / target.length) * 100);
+    $("progress").style.width = prog + "%";
+    $("charCount").textContent = typedLen + " / " + target.length;
+    $("percent").textContent = Math.round(prog) + "%";
+
+    let elapsed = startTime ? (performance.now() - startTime) / 1000 : 0;
+    $("time").innerHTML = elapsed.toFixed(1) + '<small>초</small>';
+    const liveStrokes = correctStrokesInCurrent();
+    const cpm = elapsed > 0.3 ? Math.round((liveStrokes / elapsed) * 60) : 0;
+    $("cpm").innerHTML = cpm + '<small>타/분</small>';
+    $("strokes").textContent = (totalStrokes + liveStrokes).toLocaleString();
+  }
+
+  function startTimer() { if (startTime !== null) return; startTime = performance.now(); timerId = setInterval(updateStats, 100); }
+  function stopTimer() { if (timerId) { clearInterval(timerId); timerId = null; } }
+
+  function checkDone() {
+    if (finished) return;
+    const target = current().text;
+    const typed = capture.value;
+    if (!composing && typed.length === target.length && nstr(typed) === nstr(target)) {
+      finished = true; stopTimer();
+      totalStrokes += correctStrokesInCurrent();
+      card.classList.add("done");
+      $("strokes").textContent = totalStrokes.toLocaleString();
+      doneSet.add(order[orderIdx]);
+      saveProgress();
+      refreshMeta();
+      updateMinimap();
+    }
+  }
+
+  function resetCurrent() {
+    capture.value = "";
+    composing = false; finished = false; startTime = null;
+    stopTimer();
+    card.classList.remove("done");
+    render();
+    refreshMeta();
+    window.scrollTo({ top: 0, behavior: "auto" });
+    capture.focus();
+  }
+  function refreshMeta() {
+    $("counter").textContent = "문단 " + (orderIdx + 1) + " / " + sentences.length + (doneSet.size ? " · 완독 " + doneSet.size : "");
+    $("miniLabel").textContent = (orderIdx + 1) + " / " + sentences.length;
+    const src = current().source;
+    $("source").textContent = src ? "— " + src : "";
+  }
+  function go(delta) { orderIdx = (orderIdx + delta + sentences.length) % sentences.length; resetCurrent(); saveProgress(); }
+  window.addEventListener("beforeunload", saveProgress);
+
+  capture.addEventListener("compositionstart", () => { composing = true; });
+  capture.addEventListener("compositionend", () => { composing = false; render(); });
+  capture.addEventListener("input", () => {
+    if (finished) { capture.value = current().text; return; }
+    startTimer(); render(); scheduleSaveProgress();
+  });
+  capture.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") { e.preventDefault(); if (finished) go(1); }
+    else if (e.key === "Escape") { e.preventDefault(); resetCurrent(); }
+  });
+
+  $("nextBtn").addEventListener("click", () => go(1));
+  $("prevBtn").addEventListener("click", () => go(-1));
+  $("retryBtn").addEventListener("click", resetCurrent);
+  $("shuffleBtn").addEventListener("click", () => {
+    shuffle = !shuffle;
+    $("shuffleBtn").style.color = shuffle ? "var(--gold)" : "";
+    $("shuffleBtn").style.borderColor = shuffle ? "var(--gold)" : "";
+    $("shuffleBtn").title = shuffle ? "랜덤 (켜짐)" : "순서 / 랜덤 전환";
+    buildOrder(); resetCurrent(); saveProgress();
+  });
+
+  card.addEventListener("click", () => capture.focus());
+  document.addEventListener("keydown", (e) => { if (e.key === "Tab") { e.preventDefault(); capture.focus(); } });
+
+  const overlay = $("overlay");
+  $("settingsBtn").addEventListener("click", () => { overlay.classList.add("open"); $("jsonInput").value = ""; $("msg").textContent = ""; $("msg").className = "msg"; });
+  $("closeBtn").addEventListener("click", () => overlay.classList.remove("open"));
+  overlay.addEventListener("click", (e) => { if (e.target === overlay) overlay.classList.remove("open"); });
+
+  $("loadBtn").addEventListener("click", () => {
+    const raw = $("jsonInput").value.trim();
+    const msg = $("msg");
+    if (!raw) { msg.className = "msg err"; msg.textContent = "JSON을 붙여넣어 주세요."; return; }
+    try {
+      const parsed = JSON.parse(raw);
+      if (!Array.isArray(parsed)) throw new Error("배열 형태여야 합니다.");
+      const norm = normalize(parsed);
+      if (!norm.length) throw new Error("유효한 문장이 없습니다.");
+      sentences = norm; clearProgress(); saveSentences(); buildOrder(); resetCurrent(); rebuildMinimap();
+      msg.className = "msg ok"; msg.textContent = norm.length + "개 문단을 불러왔습니다.";
+      setTimeout(() => overlay.classList.remove("open"), 800);
+    } catch (err) { msg.className = "msg err"; msg.textContent = "오류: " + err.message; }
+  });
+
+  // 빈 줄(엔터 두 번) 기준으로 장면 분할. 너무 짧은 조각은 다음 장면에 합침.
+  function splitScenes(text) {
+    const parts = text.replace(/\r/g, "").split(/\n[ \t]*\n/);
+    const segs = []; let buf = "";
+    for (let raw of parts) {
+      let s = raw.split("\n").map(l => l.replace(/\s+$/, "")).join("\n").trim();
+      if (!s) continue;
+      if (buf) { s = buf + "\n" + s; buf = ""; }
+      if (s.length < 25) { buf = s; continue; }
+      segs.push(s);
+    }
+    if (buf) { if (segs.length) segs[segs.length - 1] += "\n" + buf; else segs.push(buf); }
+    return segs;
+  }
+  $("addTextBtn").addEventListener("click", () => {
+    const msg = $("msg");
+    const body = $("bodyInput").value;
+    const title = $("srcTitle").value.trim();
+    const author = $("srcAuthor").value.trim();
+    if (!body.trim()) { msg.className = "msg err"; msg.textContent = "본문을 붙여넣어 주세요."; return; }
+    const segs = splitScenes(body);
+    if (!segs.length) { msg.className = "msg err"; msg.textContent = "등록할 장면이 없습니다."; return; }
+    const src = (title && author) ? (title + " · " + author) : (title || author || "");
+    const items = segs.map(t => ({ text: t, source: src }));
+    const append = $("appendChk").checked;
+    sentences = normalize(append ? sentences.concat(items) : items);
+    if (!append) clearProgress();
+    saveSentences(); buildOrder(); resetCurrent(); rebuildMinimap(); saveProgress();
+    msg.className = "msg ok";
+    msg.textContent = append
+      ? ("장면 " + segs.length + "개를 추가했습니다. (전체 " + sentences.length + "개)")
+      : ("장면 " + segs.length + "개로 교체했습니다.");
+    $("bodyInput").value = "";
+  });
+
+  $("exportBtn").addEventListener("click", () => {
+    const json = JSON.stringify(sentences, null, 2);
+    $("jsonInput").value = json;
+    if (navigator.clipboard) navigator.clipboard.writeText(json);
+    $("msg").className = "msg ok"; $("msg").textContent = "현재 문장을 JSON으로 복사했습니다.";
+  });
+  $("resetBtn").addEventListener("click", () => {
+    sentences = DEFAULT_SENTENCES.slice(); clearProgress(); saveSentences(); buildOrder(); resetCurrent(); rebuildMinimap();
+    $("msg").className = "msg ok"; $("msg").textContent = "기본 샘플 문단으로 복원했습니다.";
+  });
+  $("clearProgBtn").addEventListener("click", () => {
+    clearProgress(); orderIdx = 0; resetCurrent(); rebuildMinimap();
+    $("msg").className = "msg ok"; $("msg").textContent = "진행 기록을 지웠습니다. 처음부터 다시 시작합니다.";
+  });
+
+  buildOrder();
+  (function restoreProgress() {
+    const prog = loadProgress();
+    let restoredTyped = "";
+    if (prog) {
+      if (Array.isArray(prog.done)) doneSet = new Set(prog.done.filter(i => typeof i === "number" && i >= 0 && i < sentences.length));
+      if (typeof prog.pos === "number") { const oi = order.indexOf(prog.pos); if (oi >= 0) orderIdx = oi; }
+      if (typeof prog.typed === "string") restoredTyped = prog.typed;
+    }
+    resetCurrent();
+    if (restoredTyped && restoredTyped.length <= current().text.length) {
+      capture.value = restoredTyped; render();
+    }
+    if (prog && (orderIdx > 0 || doneSet.size > 0 || restoredTyped)) {
+      showToast("이어서 읽는 중 · " + (orderIdx + 1) + "번째 장면" + (doneSet.size ? " · 완독 " + doneSet.size : ""));
+    }
+  })();
+  rebuildMinimap();
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(rebuildMinimap);
+  setTimeout(() => capture.focus(), 100);
+  setTimeout(rebuildMinimap, 300);
+})();
+</script>
+</body>
+</html>
