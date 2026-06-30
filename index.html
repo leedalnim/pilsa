@@ -270,23 +270,19 @@
   }
   .list-item.is-done .list-num { background: var(--gold); border-color: var(--gold); color: var(--ink); font-weight: 700; }
   .list-item.current .list-num { border-color: #e6c987; color: #e6c987; }
-  .list-head-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
-  .list-head-row p { flex: 1; }
-  .list-toggle-all { flex-shrink: 0; padding: 7px 12px; font-size: 10px; }
-  .list-group { border: 1px solid var(--line); border-radius: 11px; overflow: hidden; }
-  .list-group + .list-group { margin-top: 9px; }
-  .lg-head {
-    display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; cursor: pointer;
-    background: var(--ink-2); border: 0; padding: 13px 14px; color: var(--paper); transition: background .15s ease;
+  /* 작품 탭: 가로로 늘어놓고, 많아지면 좌우 스크롤 */
+  .list-tabs { display: flex; gap: 7px; overflow-x: auto; overflow-y: hidden; padding: 2px 0 12px; margin-top: 6px; scrollbar-width: thin; }
+  .list-tabs::-webkit-scrollbar { height: 5px; }
+  .list-tabs::-webkit-scrollbar-thumb { background: rgba(201,164,92,0.4); border-radius: 5px; }
+  .list-tab {
+    flex: 0 0 auto; max-width: 230px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    padding: 8px 15px; border-radius: 999px; border: 1px solid var(--line); background: var(--ink);
+    color: var(--paper-dim); font-family: var(--serif); font-size: 13px; cursor: pointer; transition: all .15s ease;
   }
-  .lg-head:hover { background: rgba(201,164,92,0.08); }
-  .list-group.open .lg-head { border-bottom: 1px solid var(--line); }
-  .lg-caret { flex-shrink: 0; color: var(--paper-mute); font-size: 10px; transition: transform .18s ease; }
-  .list-group.open .lg-caret { transform: rotate(90deg); color: var(--gold); }
-  .lg-title { flex: 1; min-width: 0; font-family: var(--serif); font-size: 14px; color: var(--gold); letter-spacing: .03em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .lg-meta { flex-shrink: 0; font-size: 10px; color: var(--paper-mute); letter-spacing: .06em; white-space: nowrap; font-variant-numeric: tabular-nums; }
-  .lg-items { display: none; flex-direction: column; gap: 6px; padding: 8px; }
-  .list-group.open .lg-items { display: flex; }
+  .list-tab:hover { border-color: var(--gold); color: var(--gold); }
+  .list-tab.active { background: var(--gold); border-color: var(--gold); color: var(--ink); font-weight: 700; }
+  .list-tab .tab-badge { font-size: 10px; opacity: .75; margin-left: 6px; font-variant-numeric: tabular-nums; }
+  .list-subhead { font-size: 10px; color: var(--paper-mute); letter-spacing: .08em; padding: 2px 2px 9px; font-variant-numeric: tabular-nums; }
   .list-text { flex: 1; min-width: 0; }
   .list-snippet {
     font-family: var(--serif); font-size: 13px; line-height: 1.5; color: var(--paper);
@@ -379,11 +375,9 @@
   <!-- 목차(글 목록) modal -->
   <div class="overlay" id="listOverlay">
     <div class="modal list-modal">
-      <h2>목차 — 칠 글 고르기</h2>
-      <div class="list-head-row">
-        <p>작품을 눌러 펼치고, 장면을 누르면 이동합니다. <span class="dot done"></span> 완독 · <span class="dot now"></span> 현재</p>
-        <button class="btn list-toggle-all" id="listToggleAllBtn">모두 펼치기</button>
-      </div>
+      <h2>목차 — 타이핑 할 글 고르기</h2>
+      <p>위 탭에서 작품을 고르고, 장면을 누르면 이동합니다. <span class="dot done"></span> 완독 · <span class="dot now"></span> 현재</p>
+      <div class="list-tabs" id="listTabs"></div>
       <div class="list-body" id="listBody"></div>
       <div class="modal-actions">
         <button class="btn" id="listCloseBtn">닫기</button>
@@ -957,61 +951,70 @@
   $("closeBtn").addEventListener("click", () => overlay.classList.remove("open"));
   overlay.addEventListener("click", (e) => { if (e.target === overlay) overlay.classList.remove("open"); });
 
-  // ---- 목차: 작품(출처)별로 묶어 보여주고, 누르면 그 장면으로 이동 ----
+  // ---- 목차: 상단 탭으로 작품을 고르고, 장면을 누르면 이동 ----
   const listOverlay = $("listOverlay");
-  function buildList() {
-    const groups = [];
-    const seen = {};
+  const listTabs = $("listTabs");
+  let listGroups = [], listActiveIdx = 0;
+
+  function computeGroups() {
+    const groups = [], seen = {};
     for (let i = 0; i < sentences.length; i++) {
       const src = sentences[i].source || "(제목 없음)";
       if (!(src in seen)) { seen[src] = groups.length; groups.push({ src: src, items: [] }); }
       groups[seen[src]].items.push(i);
     }
-    const curPara = order[orderIdx];
-    let html = "";
-    for (const g of groups) {
-      const doneCount = g.items.reduce((n, i) => n + (doneSet.has(i) ? 1 : 0), 0);
-      const hasCur = g.items.indexOf(curPara) !== -1;   // 현재 치는 작품만 기본으로 펼친다
-      html += '<div class="list-group' + (hasCur ? " open" : "") + '">'
-            + '<button class="lg-head"><span class="lg-caret">▶</span>'
-            + '<span class="lg-title">' + escapeHtml(g.src) + '</span>'
-            + '<span class="lg-meta">' + g.items.length + '장 · 완독 ' + doneCount + '</span></button>'
-            + '<div class="lg-items">';
-      for (let s = 0; s < g.items.length; s++) {
-        const i = g.items[s];
-        const t = sentences[i].text;
-        const isCur = i === curPara, isDone = doneSet.has(i);
-        const snippet = t.length > 90 ? t.slice(0, 90) + "…" : t;
-        html += '<button class="list-item' + (isCur ? " current" : "") + (isDone ? " is-done" : "") + '" data-i="' + i + '">'
-              + '<span class="list-num">' + (isDone ? "✓" : (s + 1)) + '</span>'
-              + '<span class="list-text"><span class="list-snippet">' + escapeHtml(snippet) + '</span></span>'
-              + '<span class="list-len">' + t.length + '자</span></button>';
-      }
-      html += '</div></div>';
-    }
+    return groups;
+  }
+  // 선택된 작품(탭)의 장면 목록만 그린다.
+  function renderListBody() {
+    [...listTabs.children].forEach((tab) => tab.classList.toggle("active", +tab.dataset.gi === listActiveIdx));
+    const g = listGroups[listActiveIdx];
     const body = $("listBody");
+    if (!g) { body.innerHTML = ""; return; }
+    const curPara = order[orderIdx];
+    const doneCount = g.items.reduce((n, i) => n + (doneSet.has(i) ? 1 : 0), 0);
+    let html = '<div class="list-subhead">' + g.items.length + '장 · 완독 ' + doneCount + '</div>';
+    for (let s = 0; s < g.items.length; s++) {
+      const i = g.items[s];
+      const t = sentences[i].text;
+      const isCur = i === curPara, isDone = doneSet.has(i);
+      const snippet = t.length > 90 ? t.slice(0, 90) + "…" : t;
+      html += '<button class="list-item' + (isCur ? " current" : "") + (isDone ? " is-done" : "") + '" data-i="' + i + '">'
+            + '<span class="list-num">' + (isDone ? "✓" : (s + 1)) + '</span>'
+            + '<span class="list-text"><span class="list-snippet">' + escapeHtml(snippet) + '</span></span>'
+            + '<span class="list-len">' + t.length + '자</span></button>';
+    }
     body.innerHTML = html;
-    syncToggleAllLabel();
     const cur = body.querySelector(".list-item.current");
     if (cur) cur.scrollIntoView({ block: "center" });
   }
-  function syncToggleAllLabel() {
-    const groups = $("listBody").querySelectorAll(".list-group");
-    const allOpen = groups.length > 0 && [...groups].every((g) => g.classList.contains("open"));
-    $("listToggleAllBtn").textContent = allOpen ? "모두 접기" : "모두 펼치기";
+  function buildList() {
+    listGroups = computeGroups();
+    const curPara = order[orderIdx];
+    listActiveIdx = Math.max(0, listGroups.findIndex((g) => g.items.indexOf(curPara) !== -1)); // 기본 = 현재 작품
+    let tabs = "";
+    for (let gi = 0; gi < listGroups.length; gi++) {
+      const g = listGroups[gi];
+      const doneCount = g.items.reduce((n, i) => n + (doneSet.has(i) ? 1 : 0), 0);
+      const badge = (doneCount === g.items.length) ? "✓" : (doneCount + "/" + g.items.length);
+      tabs += '<button class="list-tab" data-gi="' + gi + '">' + escapeHtml(g.src)
+            + '<span class="tab-badge">' + badge + '</span></button>';
+    }
+    listTabs.innerHTML = tabs;
+    renderListBody();
+    const activeTab = listTabs.querySelector(".list-tab.active");
+    if (activeTab) activeTab.scrollIntoView({ inline: "center", block: "nearest" });
   }
   $("listBtn").addEventListener("click", () => { buildList(); listOverlay.classList.add("open"); });
   $("listCloseBtn").addEventListener("click", () => listOverlay.classList.remove("open"));
   listOverlay.addEventListener("click", (e) => { if (e.target === listOverlay) listOverlay.classList.remove("open"); });
-  $("listToggleAllBtn").addEventListener("click", () => {
-    const groups = $("listBody").querySelectorAll(".list-group");
-    const allOpen = groups.length > 0 && [...groups].every((g) => g.classList.contains("open"));
-    groups.forEach((g) => g.classList.toggle("open", !allOpen));
-    syncToggleAllLabel();
+  listTabs.addEventListener("click", (e) => {
+    const tab = e.target.closest(".list-tab");
+    if (!tab) return;
+    listActiveIdx = +tab.dataset.gi;
+    renderListBody();
   });
   $("listBody").addEventListener("click", (e) => {
-    const head = e.target.closest(".lg-head");
-    if (head) { head.parentElement.classList.toggle("open"); syncToggleAllLabel(); return; }
     const btn = e.target.closest(".list-item");
     if (!btn) return;
     const i = +btn.dataset.i;
