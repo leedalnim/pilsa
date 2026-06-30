@@ -90,11 +90,11 @@
   #display {
     font-family: var(--serif); font-weight: 400;
     font-size: clamp(19px, 2.5vw, 25px); line-height: 2.05; letter-spacing: 0.01em;
-    white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word;
+    white-space: pre-wrap; overflow-wrap: break-word; word-break: keep-all; /* 한국어: 단어 단위로 줄바꿈 */
     max-width: 100%; min-height: 2em; user-select: none;
   }
   #display .ch { position: relative; transition: color .08s ease; }
-  #display .pending  { color: var(--paper-mute); }
+  #display .pending  { color: #6e695d; }  /* 바탕 글자: 한 톤 더 옅게 */
   #display .correct  { color: var(--paper); }
   #display .wrong    { color: var(--red); text-decoration: underline; text-decoration-color: rgba(212,103,95,.5); text-underline-offset: 6px; }
   #display .composing{ color: var(--composing); }
@@ -111,7 +111,7 @@
     opacity: 0; border: 0; resize: none;
     background: transparent; color: transparent; caret-color: transparent;
     font: inherit; padding: 46px 50px; cursor: text;
-    overflow: hidden; white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word;
+    overflow: hidden; white-space: pre-wrap; overflow-wrap: break-word; word-break: keep-all;
   }
 
   /* ---- 하단: 통계 + 미니맵 한 줄 ---- */
@@ -256,6 +256,9 @@
   }
   .modal textarea:focus { outline: none; border-color: var(--gold); }
   .modal-actions { display: flex; gap: 10px; margin-top: 16px; flex-wrap: wrap; }
+  .export-row { display: flex; align-items: center; gap: 13px; margin-bottom: 11px; flex-wrap: wrap; }
+  .export-row .btn { flex-shrink: 0; }
+  .export-desc { flex: 1; min-width: 190px; font-size: 11px; line-height: 1.55; color: var(--paper-mute); }
 
   /* ---- 목차 ---- */
   .list-modal { width: min(640px, 100%); }
@@ -413,8 +416,21 @@
 
       <div class="divider"></div>
 
-      <h3 class="modal-sec">JSON으로 관리</h3>
-      <p>노션에서 받은 JSON을 붙여넣고 <b>불러오기</b>를 누르세요. 데이터는 이 브라우저에 저장되어 다음에 열어도 유지됩니다. 장면 안의 줄바꿈은 자동으로 공백으로 합쳐져 한 문단으로 이어지므로, 줄바꿈을 직접 칠 필요가 없습니다.</p>
+      <h3 class="modal-sec">내보내기 (백업 · 노션 옮기기)</h3>
+      <p>지금 등록된 <b>모든 글(전체 작품·장면)</b>을 밖으로 빼냅니다.</p>
+      <div class="export-row">
+        <button class="btn solid" id="saveTxtBtn">📄 텍스트 파일로 저장</button>
+        <span class="export-desc">노션에 붙여넣기 좋은 <b>읽기용 .txt</b> 파일이 데스크탑(다운로드 폴더)에 저장됩니다. → 파일 열어 복사 → 노션에 붙여넣기.</span>
+      </div>
+      <div class="export-row">
+        <button class="btn" id="exportBtn">JSON 복사</button>
+        <span class="export-desc">다른 기기·브라우저의 <b>이 앱에 다시 불러올 때</b> 쓰는 형식(클립보드로 복사).</span>
+      </div>
+
+      <div class="divider"></div>
+
+      <h3 class="modal-sec">불러오기 (JSON)</h3>
+      <p>위 「JSON 복사」나 다른 곳에서 받은 JSON을 붙여넣고 <b>불러오기</b>를 누르세요. 이 브라우저에 저장되어 다음에 열어도 유지됩니다.</p>
       <div class="schema">[
   { "text": "긴 문단 텍스트...", "source": "출처 (선택)" },
   { "text": "다음 문단...", "source": "" }
@@ -422,10 +438,7 @@
       <textarea id="jsonInput" placeholder='여기에 JSON 붙여넣기...'></textarea>
       <div class="modal-actions">
         <button class="btn solid" id="loadBtn">불러오기</button>
-        <button class="btn" id="saveTxtBtn">텍스트로 저장 (.txt)</button>
-        <button class="btn" id="exportBtn">JSON 복사</button>
       </div>
-      <p style="margin-top:10px">「텍스트로 저장」을 누르면 노션에 붙여넣기 좋은 글 파일이 데스크탑에 다운로드됩니다.</p>
 
       <div class="msg" id="msg"></div>
       <div class="modal-actions">
@@ -656,8 +669,8 @@
     measurer.style.lineHeight = cs.lineHeight;
     measurer.style.letterSpacing = cs.letterSpacing;
     measurer.style.whiteSpace = "pre-wrap";
-    measurer.style.overflowWrap = "anywhere";
-    measurer.style.wordBreak = "break-word";
+    measurer.style.overflowWrap = "break-word";
+    measurer.style.wordBreak = "keep-all";
     totalBodyW = w;
 
     const data = [];
