@@ -169,6 +169,56 @@
 
   .card.done { border-color: var(--green); box-shadow: 0 30px 80px -40px rgba(0,0,0,0.8), 0 0 0 1px rgba(111,174,106,.3); }
 
+  /* ---- 달리는 캐릭터: 타속(타/분)이 빠를수록 빨리 달린다 ---- */
+  .runtrack {
+    width: min(820px, 92vw); position: relative; height: 44px;
+    border-radius: 12px; overflow: hidden;
+    background: linear-gradient(180deg, transparent 58%, rgba(201,164,92,0.05) 58%);
+  }
+  .runtrack::after {                /* 바닥 트랙(점선) */
+    content: ""; position: absolute; left: 10px; right: 10px; bottom: 10px; height: 2px;
+    background: repeating-linear-gradient(90deg, var(--paper-mute) 0 8px, transparent 8px 16px);
+    opacity: .3;
+  }
+  .runner {
+    position: absolute; bottom: 10px; left: 4%;
+    font-size: 22px; line-height: 1; transform-origin: 50% 100%;
+    animation: runbob .8s ease-in-out infinite; animation-play-state: paused;
+    transition: left .18s linear; will-change: transform, left;
+    filter: drop-shadow(0 2px 2px rgba(0,0,0,.4)); z-index: 2;
+  }
+  .goal {
+    position: absolute; right: 3%; bottom: 9px; font-size: 20px; z-index: 1;
+    animation: flagwave 1.6s ease-in-out infinite;
+  }
+  @keyframes runbob {
+    0%   { transform: translateY(0) rotate(-7deg); }
+    25%  { transform: translateY(-7px) rotate(4deg); }
+    50%  { transform: translateY(0) rotate(7deg); }
+    75%  { transform: translateY(-4px) rotate(-3deg); }
+    100% { transform: translateY(0) rotate(-7deg); }
+  }
+  @keyframes flagwave { 50% { transform: rotate(-13deg) translateY(-1px); } }
+  /* 빠르게 칠수록 속도선과 먼지가 붙는다 */
+  .runtrack.run .runner::after,
+  .runtrack.sprint .runner::after {
+    content: ""; position: absolute; right: 100%; bottom: 2px; margin-right: 3px;
+    width: 14px; height: 2px; border-radius: 2px;
+    background: linear-gradient(90deg, transparent, var(--gold)); opacity: .55;
+  }
+  .runtrack.sprint .runner::before {
+    content: "💨"; position: absolute; right: 90%; bottom: -3px; font-size: 13px;
+    opacity: .9; animation: puff .4s ease-out infinite;
+  }
+  @keyframes puff {
+    from { opacity: .9; transform: translateX(0) scale(.8); }
+    to   { opacity: 0; transform: translateX(-9px) scale(1.25); }
+  }
+  /* 완주하면 결승선에서 깡총깡총 */
+  .runtrack.cleared .runner { animation: cheer .55s ease-in-out infinite; }
+  @keyframes cheer { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-11px) rotate(0); } }
+  @media (max-width: 600px) { .runner, .goal { font-size: 19px; } }
+
   /* ---- 모달 ---- */
   .overlay {
     position: fixed; inset: 0; z-index: 50; background: rgba(8,10,15,0.72);
@@ -241,6 +291,11 @@
     <div class="card" id="card">
       <div id="display"></div>
       <textarea id="capture" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false"></textarea>
+    </div>
+
+    <div class="runtrack" id="runtrack" aria-hidden="true">
+      <div class="runner" id="runner">🏃</div>
+      <div class="goal">🏁</div>
     </div>
 
     <div class="bottom">
@@ -376,6 +431,8 @@
   const display = $("display");
   const capture = $("capture");
   const card = $("card");
+  const runner = $("runner");
+  const runtrack = $("runtrack");
   const topbar = document.querySelector(".topbar");
   const minimap = $("minimap");
   const miniInner = $("miniInner");
@@ -658,6 +715,26 @@
     const cpm = elapsed > 0.3 ? Math.round((liveStrokes / elapsed) * 60) : 0;
     $("cpm").innerHTML = cpm + '<small>타/분</small>';
     $("strokes").textContent = (totalStrokes + liveStrokes).toLocaleString();
+    updateRunner(cpm, prog);
+  }
+
+  // 타속(타/분)에 맞춰 캐릭터를 달리게 한다. 위치는 현재 문장 진행률, 다리 속도는 타속.
+  function updateRunner(cpm, prog) {
+    if (!runner || !runtrack) return;
+    if (runtrack.classList.contains("cleared")) return;   // 완주 연출 중엔 건드리지 않음
+    runner.style.left = (4 + (prog / 100) * 84) + "%";    // 4% → 88% 사이를 달린다
+    if (cpm <= 0) {
+      runner.style.animationPlayState = "paused";
+      runtrack.classList.remove("jog", "run", "sprint");
+      return;
+    }
+    // 타속이 빠를수록 다리 주기를 짧게 (0.16s ~ 0.85s)
+    const dur = Math.max(0.16, 0.85 - cpm / 700);
+    runner.style.animationPlayState = "running";
+    runner.style.animationDuration = dur.toFixed(3) + "s";
+    runtrack.classList.toggle("jog", cpm <= 250);
+    runtrack.classList.toggle("run", cpm > 250 && cpm <= 500);
+    runtrack.classList.toggle("sprint", cpm > 500);
   }
 
   function startTimer() { if (startTime !== null) return; startTime = performance.now(); timerId = setInterval(updateStats, 100); }
@@ -671,6 +748,12 @@
       finished = true; stopTimer();
       totalStrokes += correctStrokesInCurrent();
       card.classList.add("done");
+      if (runner && runtrack) {                 // 결승선에서 깡총깡총
+        runner.style.left = "88%";
+        runner.style.animationPlayState = "running";
+        runtrack.classList.remove("jog", "run", "sprint");
+        runtrack.classList.add("cleared");
+      }
       $("strokes").textContent = totalStrokes.toLocaleString();
       doneSet.add(order[orderIdx]);
       saveProgress();
@@ -684,6 +767,7 @@
     composing = false; finished = false; startTime = null;
     stopTimer();
     card.classList.remove("done");
+    if (runtrack) runtrack.classList.remove("jog", "run", "sprint", "cleared");
     render();
     refreshMeta();
     window.scrollTo({ top: 0, behavior: "auto" });
