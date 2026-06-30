@@ -428,6 +428,7 @@
       <div class="msg" id="msg"></div>
       <div class="modal-actions">
         <button class="btn" id="clearProgBtn">진행 기록 지우기</button>
+        <button class="btn" id="repoBtn">저장소 원본 불러오기</button>
         <button class="btn" id="resetBtn">기본값 복원</button>
         <button class="btn" id="closeBtn">닫기</button>
       </div>
@@ -1070,6 +1071,7 @@
       if (!Array.isArray(parsed)) throw new Error("배열 형태여야 합니다.");
       const norm = normalize(parsed);
       if (!norm.length) throw new Error("유효한 문장이 없습니다.");
+      if (sentences.length && !confirm("기존 " + sentences.length + "개 문단을 모두 지우고 이 JSON으로 교체합니다. 계속할까요?")) return;
       sentences = norm; clearProgress(); saveSentences(); buildOrder(); resetCurrent(); rebuildMinimap();
       msg.className = "msg ok"; msg.textContent = norm.length + "개 문단을 불러왔습니다.";
       setTimeout(() => overlay.classList.remove("open"), 800);
@@ -1101,6 +1103,7 @@
     const src = (title && author) ? (title + " · " + author) : (title || author || "");
     const items = segs.map(t => ({ text: t, source: src }));
     const append = $("appendChk").checked;
+    if (!append && sentences.length && !confirm("'이어붙이기'가 꺼져 있어 기존 " + sentences.length + "개 문단을 모두 지우고 교체합니다. 계속할까요?")) return;
     sentences = normalize(append ? sentences.concat(items) : items);
     if (!append) clearProgress();
     saveSentences(); buildOrder(); resetCurrent(); rebuildMinimap(); saveProgress();
@@ -1118,8 +1121,29 @@
     $("msg").className = "msg ok"; $("msg").textContent = "현재 문장을 JSON으로 복사했습니다.";
   });
   $("resetBtn").addEventListener("click", () => {
+    if (sentences.length && !confirm("현재 문장을 모두 지우고 기본 샘플로 되돌립니다. 계속할까요?")) return;
     sentences = DEFAULT_SENTENCES.slice(); clearProgress(); saveSentences(); buildOrder(); resetCurrent(); rebuildMinimap();
     $("msg").className = "msg ok"; $("msg").textContent = "기본 샘플 문단으로 복원했습니다.";
+  });
+  // 저장소(sentences.json) 원본을 다시 불러온다 — 실수로 지웠을 때 복구용.
+  $("repoBtn").addEventListener("click", () => {
+    const msg = $("msg");
+    msg.className = "msg"; msg.textContent = "저장소에서 불러오는 중…";
+    fetch("sentences.json", { cache: "no-store" })
+      .then((res) => { if (!res.ok) throw new Error("파일을 찾을 수 없습니다 (" + res.status + ")"); return res.json(); })
+      .then((data) => {
+        const norm = normalize(Array.isArray(data) ? data : []);
+        if (!norm.length) throw new Error("저장소 파일에 유효한 문장이 없습니다.");
+        if (sentences.length && !confirm("저장소 원본 " + norm.length + "개 문단으로 교체합니다. (현재 " + sentences.length + "개는 사라집니다) 계속할까요?")) {
+          msg.textContent = ""; return;
+        }
+        sentences = norm; clearProgress(); saveSentences(); buildOrder(); resetCurrent(); rebuildMinimap();
+        msg.className = "msg ok"; msg.textContent = "저장소 원본 " + norm.length + "개 문단을 불러왔습니다.";
+      })
+      .catch((err) => {
+        msg.className = "msg err";
+        msg.textContent = "불러오기 실패: " + err.message + " (로컬 파일(file://)로 열면 보안상 막힐 수 있어요. 배포 주소에서 시도하세요.)";
+      });
   });
   $("clearProgBtn").addEventListener("click", () => {
     clearProgress(); orderIdx = 0; resetCurrent(); rebuildMinimap();
