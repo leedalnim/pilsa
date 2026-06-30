@@ -239,6 +239,41 @@
   }
   .modal textarea:focus { outline: none; border-color: var(--gold); }
   .modal-actions { display: flex; gap: 10px; margin-top: 16px; flex-wrap: wrap; }
+
+  /* ---- 목차 ---- */
+  .list-modal { width: min(640px, 100%); }
+  .list-modal .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; vertical-align: middle; margin: 0 2px; }
+  .list-modal .dot.done { background: var(--gold); }
+  .list-modal .dot.now { background: #e6c987; box-shadow: 0 0 0 2px rgba(230,201,135,0.4); }
+  .list-body { display: flex; flex-direction: column; gap: 6px; max-height: 62vh; overflow-y: auto; margin: 4px -6px 0; padding: 0 6px; }
+  .list-item {
+    display: flex; align-items: flex-start; gap: 11px; width: 100%; text-align: left;
+    background: var(--ink); border: 1px solid var(--line); border-radius: 10px;
+    padding: 11px 13px; color: var(--paper-dim); cursor: pointer; transition: border-color .15s ease, background .15s ease;
+  }
+  .list-item:hover { border-color: var(--gold); background: rgba(201,164,92,0.06); }
+  .list-item.current { border-color: var(--gold); background: rgba(201,164,92,0.1); }
+  .list-num {
+    flex-shrink: 0; width: 30px; height: 30px; border-radius: 8px; display: grid; place-items: center;
+    font-family: var(--mono); font-size: 12px; font-variant-numeric: tabular-nums;
+    background: var(--ink-2); border: 1px solid var(--line); color: var(--paper-mute);
+  }
+  .list-item.is-done .list-num { background: var(--gold); border-color: var(--gold); color: var(--ink); font-weight: 700; }
+  .list-item.current .list-num { border-color: #e6c987; color: #e6c987; }
+  .list-group { display: flex; flex-direction: column; gap: 6px; }
+  .list-group + .list-group { margin-top: 14px; }
+  .list-group-head {
+    display: flex; align-items: baseline; justify-content: space-between; gap: 10px;
+    padding: 2px 2px 4px; border-bottom: 1px solid var(--line); margin-bottom: 2px;
+  }
+  .lg-title { font-family: var(--serif); font-size: 14px; color: var(--gold); letter-spacing: .03em; }
+  .lg-meta { font-size: 10px; color: var(--paper-mute); letter-spacing: .08em; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .list-text { flex: 1; min-width: 0; }
+  .list-snippet {
+    font-family: var(--serif); font-size: 13px; line-height: 1.5; color: var(--paper);
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+  }
+  .list-len { flex-shrink: 0; font-size: 10px; color: var(--paper-mute); letter-spacing: .04em; font-variant-numeric: tabular-nums; padding-top: 3px; }
   .schema {
     background: var(--ink); border: 1px solid var(--line); border-radius: 8px; padding: 12px;
     font-size: 11px; color: var(--paper-dim); white-space: pre; overflow-x: auto; margin-bottom: 16px;
@@ -277,6 +312,7 @@
     <div class="topbar-row r1">
       <div class="brand"><h1>필사</h1><span class="sub">typing&nbsp;archive</span></div>
       <div class="top-actions">
+        <button class="icon-btn" id="listBtn" title="목차 — 글 골라 치기">☰</button>
         <button class="icon-btn" id="shuffleBtn" title="순서 / 랜덤 전환">⇄</button>
         <button class="icon-btn" id="settingsBtn" title="문장 데이터 관리">⚙</button>
       </div>
@@ -320,6 +356,18 @@
       <div class="hint"><kbd>Enter</kbd> 완료 시 다음 · <kbd>Esc</kbd> 현재 다시 · <kbd>Tab</kbd> 입력창 포커스</div>
     </div>
   </main>
+
+  <!-- 목차(글 목록) modal -->
+  <div class="overlay" id="listOverlay">
+    <div class="modal list-modal">
+      <h2>목차 — 칠 글 고르기</h2>
+      <p>치고 싶은 장면을 누르면 그 자리로 이동합니다. <span class="dot done"></span> 완독 · <span class="dot now"></span> 지금 위치</p>
+      <div class="list-body" id="listBody"></div>
+      <div class="modal-actions">
+        <button class="btn" id="listCloseBtn">닫기</button>
+      </div>
+    </div>
+  </div>
 
   <!-- settings modal -->
   <div class="overlay" id="overlay">
@@ -852,6 +900,52 @@
   $("settingsBtn").addEventListener("click", () => { overlay.classList.add("open"); $("jsonInput").value = ""; $("msg").textContent = ""; $("msg").className = "msg"; });
   $("closeBtn").addEventListener("click", () => overlay.classList.remove("open"));
   overlay.addEventListener("click", (e) => { if (e.target === overlay) overlay.classList.remove("open"); });
+
+  // ---- 목차: 작품(출처)별로 묶어 보여주고, 누르면 그 장면으로 이동 ----
+  const listOverlay = $("listOverlay");
+  function buildList() {
+    const groups = [];
+    const seen = {};
+    for (let i = 0; i < sentences.length; i++) {
+      const src = sentences[i].source || "(제목 없음)";
+      if (!(src in seen)) { seen[src] = groups.length; groups.push({ src: src, items: [] }); }
+      groups[seen[src]].items.push(i);
+    }
+    const curPara = order[orderIdx];
+    let html = "";
+    for (const g of groups) {
+      const doneCount = g.items.reduce((n, i) => n + (doneSet.has(i) ? 1 : 0), 0);
+      html += '<div class="list-group"><div class="list-group-head">'
+            + '<span class="lg-title">' + escapeHtml(g.src) + '</span>'
+            + '<span class="lg-meta">' + g.items.length + '장 · 완독 ' + doneCount + '</span></div>';
+      for (let s = 0; s < g.items.length; s++) {
+        const i = g.items[s];
+        const t = sentences[i].text;
+        const isCur = i === curPara, isDone = doneSet.has(i);
+        const snippet = t.length > 90 ? t.slice(0, 90) + "…" : t;
+        html += '<button class="list-item' + (isCur ? " current" : "") + (isDone ? " is-done" : "") + '" data-i="' + i + '">'
+              + '<span class="list-num">' + (isDone ? "✓" : (s + 1)) + '</span>'
+              + '<span class="list-text"><span class="list-snippet">' + escapeHtml(snippet) + '</span></span>'
+              + '<span class="list-len">' + t.length + '자</span></button>';
+      }
+      html += '</div>';
+    }
+    const body = $("listBody");
+    body.innerHTML = html;
+    const cur = body.querySelector(".list-item.current");
+    if (cur) cur.scrollIntoView({ block: "center" });
+  }
+  $("listBtn").addEventListener("click", () => { buildList(); listOverlay.classList.add("open"); });
+  $("listCloseBtn").addEventListener("click", () => listOverlay.classList.remove("open"));
+  listOverlay.addEventListener("click", (e) => { if (e.target === listOverlay) listOverlay.classList.remove("open"); });
+  $("listBody").addEventListener("click", (e) => {
+    const btn = e.target.closest(".list-item");
+    if (!btn) return;
+    const i = +btn.dataset.i;
+    const oi = order.indexOf(i);
+    if (oi >= 0) { orderIdx = oi; resetCurrent(); saveProgress(); }
+    listOverlay.classList.remove("open");
+  });
 
   $("loadBtn").addEventListener("click", () => {
     const raw = $("jsonInput").value.trim();
