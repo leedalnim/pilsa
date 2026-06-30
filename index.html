@@ -260,14 +260,23 @@
   }
   .list-item.is-done .list-num { background: var(--gold); border-color: var(--gold); color: var(--ink); font-weight: 700; }
   .list-item.current .list-num { border-color: #e6c987; color: #e6c987; }
-  .list-group { display: flex; flex-direction: column; gap: 6px; }
-  .list-group + .list-group { margin-top: 14px; }
-  .list-group-head {
-    display: flex; align-items: baseline; justify-content: space-between; gap: 10px;
-    padding: 2px 2px 4px; border-bottom: 1px solid var(--line); margin-bottom: 2px;
+  .list-head-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+  .list-head-row p { flex: 1; }
+  .list-toggle-all { flex-shrink: 0; padding: 7px 12px; font-size: 10px; }
+  .list-group { border: 1px solid var(--line); border-radius: 11px; overflow: hidden; }
+  .list-group + .list-group { margin-top: 9px; }
+  .lg-head {
+    display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; cursor: pointer;
+    background: var(--ink-2); border: 0; padding: 13px 14px; color: var(--paper); transition: background .15s ease;
   }
-  .lg-title { font-family: var(--serif); font-size: 14px; color: var(--gold); letter-spacing: .03em; }
-  .lg-meta { font-size: 10px; color: var(--paper-mute); letter-spacing: .08em; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .lg-head:hover { background: rgba(201,164,92,0.08); }
+  .list-group.open .lg-head { border-bottom: 1px solid var(--line); }
+  .lg-caret { flex-shrink: 0; color: var(--paper-mute); font-size: 10px; transition: transform .18s ease; }
+  .list-group.open .lg-caret { transform: rotate(90deg); color: var(--gold); }
+  .lg-title { flex: 1; min-width: 0; font-family: var(--serif); font-size: 14px; color: var(--gold); letter-spacing: .03em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .lg-meta { flex-shrink: 0; font-size: 10px; color: var(--paper-mute); letter-spacing: .06em; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .lg-items { display: none; flex-direction: column; gap: 6px; padding: 8px; }
+  .list-group.open .lg-items { display: flex; }
   .list-text { flex: 1; min-width: 0; }
   .list-snippet {
     font-family: var(--serif); font-size: 13px; line-height: 1.5; color: var(--paper);
@@ -361,7 +370,10 @@
   <div class="overlay" id="listOverlay">
     <div class="modal list-modal">
       <h2>목차 — 칠 글 고르기</h2>
-      <p>치고 싶은 장면을 누르면 그 자리로 이동합니다. <span class="dot done"></span> 완독 · <span class="dot now"></span> 지금 위치</p>
+      <div class="list-head-row">
+        <p>작품을 눌러 펼치고, 장면을 누르면 이동합니다. <span class="dot done"></span> 완독 · <span class="dot now"></span> 현재</p>
+        <button class="btn list-toggle-all" id="listToggleAllBtn">모두 펼치기</button>
+      </div>
       <div class="list-body" id="listBody"></div>
       <div class="modal-actions">
         <button class="btn" id="listCloseBtn">닫기</button>
@@ -915,9 +927,12 @@
     let html = "";
     for (const g of groups) {
       const doneCount = g.items.reduce((n, i) => n + (doneSet.has(i) ? 1 : 0), 0);
-      html += '<div class="list-group"><div class="list-group-head">'
+      const hasCur = g.items.indexOf(curPara) !== -1;   // 현재 치는 작품만 기본으로 펼친다
+      html += '<div class="list-group' + (hasCur ? " open" : "") + '">'
+            + '<button class="lg-head"><span class="lg-caret">▶</span>'
             + '<span class="lg-title">' + escapeHtml(g.src) + '</span>'
-            + '<span class="lg-meta">' + g.items.length + '장 · 완독 ' + doneCount + '</span></div>';
+            + '<span class="lg-meta">' + g.items.length + '장 · 완독 ' + doneCount + '</span></button>'
+            + '<div class="lg-items">';
       for (let s = 0; s < g.items.length; s++) {
         const i = g.items[s];
         const t = sentences[i].text;
@@ -928,17 +943,31 @@
               + '<span class="list-text"><span class="list-snippet">' + escapeHtml(snippet) + '</span></span>'
               + '<span class="list-len">' + t.length + '자</span></button>';
       }
-      html += '</div>';
+      html += '</div></div>';
     }
     const body = $("listBody");
     body.innerHTML = html;
+    syncToggleAllLabel();
     const cur = body.querySelector(".list-item.current");
     if (cur) cur.scrollIntoView({ block: "center" });
+  }
+  function syncToggleAllLabel() {
+    const groups = $("listBody").querySelectorAll(".list-group");
+    const allOpen = groups.length > 0 && [...groups].every((g) => g.classList.contains("open"));
+    $("listToggleAllBtn").textContent = allOpen ? "모두 접기" : "모두 펼치기";
   }
   $("listBtn").addEventListener("click", () => { buildList(); listOverlay.classList.add("open"); });
   $("listCloseBtn").addEventListener("click", () => listOverlay.classList.remove("open"));
   listOverlay.addEventListener("click", (e) => { if (e.target === listOverlay) listOverlay.classList.remove("open"); });
+  $("listToggleAllBtn").addEventListener("click", () => {
+    const groups = $("listBody").querySelectorAll(".list-group");
+    const allOpen = groups.length > 0 && [...groups].every((g) => g.classList.contains("open"));
+    groups.forEach((g) => g.classList.toggle("open", !allOpen));
+    syncToggleAllLabel();
+  });
   $("listBody").addEventListener("click", (e) => {
+    const head = e.target.closest(".lg-head");
+    if (head) { head.parentElement.classList.toggle("open"); syncToggleAllLabel(); return; }
     const btn = e.target.closest(".list-item");
     if (!btn) return;
     const i = +btn.dataset.i;
