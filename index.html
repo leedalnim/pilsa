@@ -26,13 +26,17 @@
   * { margin: 0; padding: 0; box-sizing: border-box; }
   html { scroll-behavior: smooth; }
   body {
-    background: radial-gradient(120% 80% at 50% -10%, #20242f 0%, var(--ink) 55%, #0f1219 100%);
-    background-attachment: fixed;
+    background: var(--ink);
     color: var(--paper);
     font-family: var(--mono);
     min-height: 100vh;
     -webkit-font-smoothing: antialiased;
     overflow-x: hidden;
+  }
+  /* 라디얼 그라데이션을 고정 합성 레이어로 분리 — 스크롤해도 다시 페인트되지 않는다 */
+  body::after {
+    content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none;
+    background: radial-gradient(120% 80% at 50% -10%, #20242f 0%, var(--ink) 55%, #0f1219 100%);
   }
   body::before {
     content: ""; position: fixed; inset: 0; pointer-events: none;
@@ -44,8 +48,7 @@
   /* ---- 상단 고정 바 ---- */
   .topbar {
     position: sticky; top: 0; z-index: 20;
-    background: rgba(20,23,31,0.82);
-    backdrop-filter: blur(10px);
+    background: rgba(20,23,31,0.95);   /* blur 제거: 스크롤마다 재계산되던 비용 삭제, 불투명도로 대체 */
     border-bottom: 1px solid var(--line);
   }
   .topbar-row {
@@ -507,6 +510,7 @@
   let _rnX = -1, _rnBucket = -2, _rnRunning = null; // 마지막으로 기록한 위치/속도버킷/달림상태
   const RUN_DURS = [0.85, 0.6, 0.42, 0.3, 0.18];   // 속도 버킷별 다리 주기
   function refreshTrackW() { if (runtrack) trackW = runtrack.clientWidth || trackW; }
+  let dispSpans = [], extraSpans = [], dispText = null;  // 본문 글자 span 캐시(키 입력마다 재생성 금지)
   const topbar = document.querySelector(".topbar");
   const minimap = $("minimap");
   const miniInner = $("miniInner");
@@ -563,32 +567,51 @@
   }
   function current() { return sentences[order[orderIdx]]; }
 
+  // \uBB38\uB2E8\uC774 \uBC14\uB014 \uB54C\uB9CC \uAE00\uC790 span\uC744 \uC0C8\uB85C \uB9CC\uB4E0\uB2E4.
+  function buildDisplay(target) {
+    let html = "";
+    for (let i = 0; i < target.length; i++) {
+      html += '<span class="ch pending">' + escapeHtml(target[i] === " " ? "\u00A0" : target[i]) + '</span>';
+    }
+    display.innerHTML = html;
+    dispSpans = Array.prototype.slice.call(display.children);
+    for (const sp of dispSpans) { sp._c = "ch pending"; sp._t = sp.textContent; }
+    extraSpans = [];
+    dispText = target;
+  }
+  // \uD0A4 \uC785\uB825\uB9C8\uB2E4: \uC804\uCCB4\uB97C \uB2E4\uC2DC \uADF8\uB9AC\uC9C0 \uC54A\uACE0 \uBC14\uB010 \uAE00\uC790 span\uB9CC \uAC31\uC2E0\uD55C\uB2E4(\uBCF4\uD1B5 1~2\uAC1C).
   function render() {
     const target = current().text;
     const typed = capture.value;
-    let html = "";
-    for (let i = 0; i < target.length; i++) {
-      const tgt = target[i];
-      const safe = escapeHtml(tgt === " " ? "\u00A0" : tgt);
-      if (i < typed.length) {
-        const inp = typed[i];
-        const isLast = i === typed.length - 1;
-        let cls;
-        if (composing && isLast) cls = isProgressingTo(inp, tgt) ? "composing" : "wrong";
-        else cls = eqc(inp, tgt) ? "correct" : "wrong";
-        html += '<span class="ch ' + cls + '">' + escapeHtml(inp === " " ? "\u00A0" : inp) + '</span>';
-      } else if (i === typed.length) {
-        html += '<span class="ch pending cursor">' + safe + '</span>';
+    if (dispText !== target) buildDisplay(target);
+    const tl = typed.length, gl = target.length;
+    for (let i = 0; i < gl; i++) {
+      let cls, ch;
+      if (i < tl) {
+        ch = typed[i];
+        if (composing && i === tl - 1) cls = isProgressingTo(ch, target[i]) ? "ch composing" : "ch wrong";
+        else cls = eqc(ch, target[i]) ? "ch correct" : "ch wrong";
+      } else if (i === tl) {
+        ch = target[i]; cls = "ch pending cursor";
       } else {
-        html += '<span class="ch pending">' + safe + '</span>';
+        ch = target[i]; cls = "ch pending";
       }
+      const sp = dispSpans[i];
+      const text = ch === " " ? "\u00A0" : ch;
+      if (sp._t !== text) { sp.textContent = text; sp._t = text; }
+      if (sp._c !== cls) { sp.className = cls; sp._c = cls; }
     }
-    if (typed.length > target.length) {
-      for (let i = target.length; i < typed.length; i++) {
-        html += '<span class="ch extra">' + escapeHtml(typed[i] === " " ? "\u00A0" : typed[i]) + '</span>';
-      }
+    // \uBCF8\uBB38\uBCF4\uB2E4 \uB354 \uCE5C \uAE00\uC790(\uC624\uBC84\uB7F0)\uB294 \uB05D\uC5D0 \uBCC4\uB3C4 span\uC73C\uB85C \uBD99\uC600\uB2E4 \uB5C0\uB2E4.
+    const need = Math.max(0, tl - gl);
+    while (extraSpans.length < need) { const sp = document.createElement("span"); display.appendChild(sp); extraSpans.push(sp); }
+    while (extraSpans.length > need) { display.removeChild(extraSpans.pop()); }
+    for (let k = 0; k < need; k++) {
+      const ch = typed[gl + k];
+      const text = ch === " " ? "\u00A0" : ch;
+      const sp = extraSpans[k];
+      if (sp._t !== text) { sp.textContent = text; sp._t = text; }
+      if (sp._c !== "ch extra") { sp.className = "ch extra"; sp._c = "ch extra"; }
     }
-    display.innerHTML = html;
     autoScroll();
     updateMinimap();
     updateStats();
