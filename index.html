@@ -229,6 +229,13 @@
   /* 완주하면 결승선에서 깡총깡총 */
   .runtrack.cleared .runner-bob { animation: cheer .55s ease-in-out infinite; animation-play-state: running; }
   @keyframes cheer { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-11px) rotate(0); } }
+  /* 완주 순간 색종이 한 줌 (가볍게: transform/opacity만, 끝나면 제거) */
+  .confetti-layer { position: fixed; inset: 0; pointer-events: none; overflow: hidden; z-index: 70; }
+  .confetti { position: absolute; border-radius: 1px; will-change: transform, opacity; opacity: 0; }
+  @keyframes confetti-fly {
+    0%   { transform: translate(0,0) rotate(0); opacity: 1; }
+    100% { transform: translate(var(--dx), var(--dy)) rotate(var(--rot)); opacity: 0; }
+  }
   @media (max-width: 600px) { .runner-bob, .goal { font-size: 19px; } }
 
   /* ---- 모달 ---- */
@@ -876,6 +883,36 @@
   function startTimer() { if (startTime !== null) return; startTime = performance.now(); timerId = setInterval(updateStats, 100); }
   function stopTimer() { if (timerId) { clearInterval(timerId); timerId = null; } }
 
+  // 완주 순간 골 깃발에서 작은 색종이가 톡 터진다. 18조각, 1.6초 뒤 통째로 제거.
+  const CONFETTI_COLORS = ["#c9a45c", "#e6c987", "#6fae6a", "#d4675f", "#f4ecdc", "#8fb8e0"];
+  function burstConfetti() {
+    let ox, oy;
+    const goal = runtrack && runtrack.querySelector(".goal");
+    if (goal) { const r = goal.getBoundingClientRect(); ox = r.left + r.width / 2; oy = r.top + r.height / 2; }
+    else { ox = window.innerWidth / 2; oy = window.innerHeight / 3; }
+    const layer = document.createElement("div");
+    layer.className = "confetti-layer";
+    for (let k = 0; k < 18; k++) {
+      const p = document.createElement("i");
+      p.className = "confetti";
+      const ang = Math.random() * Math.PI * 2;
+      const dist = 26 + Math.random() * 46;
+      const dx = Math.cos(ang) * dist;
+      const dy = Math.sin(ang) * dist + 18 + Math.random() * 42;   // 약간 아래로(중력 느낌)
+      p.style.left = ox + "px"; p.style.top = oy + "px";
+      p.style.width = (4 + Math.random() * 3).toFixed(1) + "px";
+      p.style.height = (6 + Math.random() * 4).toFixed(1) + "px";
+      p.style.background = CONFETTI_COLORS[k % CONFETTI_COLORS.length];
+      p.style.setProperty("--dx", dx.toFixed(1) + "px");
+      p.style.setProperty("--dy", dy.toFixed(1) + "px");
+      p.style.setProperty("--rot", (Math.random() * 540 - 270).toFixed(0) + "deg");
+      p.style.animation = "confetti-fly " + (0.9 + Math.random() * 0.5).toFixed(2) + "s cubic-bezier(.18,.7,.3,1) forwards";
+      layer.appendChild(p);
+    }
+    document.body.appendChild(layer);
+    setTimeout(() => layer.remove(), 1600);
+  }
+
   function checkDone() {
     if (finished) return;
     const target = current().text;
@@ -890,6 +927,7 @@
         runtrack.classList.remove("jog", "run", "sprint", "running");
         runtrack.classList.add("cleared");
       }
+      burstConfetti();
       $("strokes").textContent = totalStrokes.toLocaleString();
       doneSet.add(order[orderIdx]);
       saveProgress();
