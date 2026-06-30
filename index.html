@@ -4,7 +4,20 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <meta name="robots" content="noindex, nofollow" />
-<title>필사 — 타이핑 연습</title>
+<title>타이핑 필사</title>
+<link rel="icon" type="image/svg+xml" href="icon.svg" />
+<meta name="description" content="좋아하는 글을 한 글자씩 따라 적는 타이핑 필사" />
+<!-- 링크 미리보기(노션 등): 제목·설명·아이콘 -->
+<meta property="og:type" content="website" />
+<meta property="og:site_name" content="타이핑 필사" />
+<meta property="og:title" content="타이핑 필사" />
+<meta property="og:description" content="좋아하는 글을 한 글자씩 따라 적는 타이핑 필사" />
+<meta property="og:url" content="https://leedalnim.github.io/pilsa/" />
+<meta property="og:image" content="https://leedalnim.github.io/pilsa/icon.svg" />
+<meta name="twitter:card" content="summary" />
+<meta name="twitter:title" content="타이핑 필사" />
+<meta name="twitter:description" content="좋아하는 글을 한 글자씩 따라 적는 타이핑 필사" />
+<meta name="twitter:image" content="https://leedalnim.github.io/pilsa/icon.svg" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@400;500;600&family=Gowun+Batang:wght@400;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
@@ -1190,12 +1203,16 @@
     $("msg").className = "msg ok"; $("msg").textContent = "진행 기록을 지웠습니다. 처음부터 다시 시작합니다.";
   });
 
-  function hasStoredSentences() {
-    try {
-      const raw = localStorage.getItem(LS_KEY);
-      if (raw) { const p = JSON.parse(raw); return Array.isArray(p) && p.length > 0; }
-    } catch (e) {}
-    return false;
+  // 저장된 데이터 상태 점검(자기검증): valid(정상) / none(없음) / corrupt(손상)
+  function storedState() {
+    let raw;
+    try { raw = localStorage.getItem(LS_KEY); } catch (e) { return "none"; }
+    if (!raw) return "none";
+    let p;
+    try { p = JSON.parse(raw); } catch (e) { return "corrupt"; }   // JSON 자체가 깨짐
+    if (!Array.isArray(p) || p.length === 0) return "corrupt";      // 배열이 아니거나 빈 값
+    if (normalize(p).length === 0) return "corrupt";                // 항목이 전부 깨짐
+    return "valid";
   }
 
   function init() {
@@ -1223,12 +1240,17 @@
     setTimeout(() => capture.focus(), 100);
   }
 
-  // 이 브라우저에 저장된 데이터가 없으면(=새 기기/브라우저) 같은 폴더의 sentences.json을
-  // 불러와 시작한다. 설정창에서 직접 붙여넣어 편집한 데이터가 있으면 그쪽을 우선한다.
+  // 저장 데이터가 정상이면 그대로 시작. 없으면(새 기기) 같은 폴더의 sentences.json을 불러온다.
+  // 손상됐으면(자기검증) 깨진 데이터를 버리고 원본을 복구한 뒤 사용자에게 알린다.
   // 파일이 없거나 file://로 열어 fetch가 실패하면 조용히 기본 안내 문장으로 시작한다.
-  if (hasStoredSentences()) {
+  const _storedState = storedState();
+  if (_storedState === "valid") {
     init();
   } else {
+    if (_storedState === "corrupt") {
+      try { localStorage.removeItem(LS_KEY); } catch (e) {}
+      clearProgress();   // 손상 데이터 기준의 진행 기록도 함께 정리
+    }
     fetch("sentences.json", { cache: "no-store" })
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
@@ -1238,7 +1260,10 @@
         }
       })
       .catch(() => {})
-      .finally(init);
+      .finally(() => {
+        init();
+        if (_storedState === "corrupt") showToast("저장된 데이터가 손상돼 원본을 복구했어요.");
+      });
   }
 })();
 </script>
