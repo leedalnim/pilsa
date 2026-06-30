@@ -187,6 +187,8 @@
     transition: left .18s linear; will-change: transform, left;
     filter: drop-shadow(0 2px 2px rgba(0,0,0,.4)); z-index: 2;
   }
+  /* 이모지가 기본적으로 왼쪽을 보므로, 글리프만 좌우 반전해 골(오른쪽)을 향하게 한다 */
+  .runner-body { display: inline-block; transform: scaleX(-1); }
   .goal {
     position: absolute; right: 3%; bottom: 9px; font-size: 20px; z-index: 1;
     animation: flagwave 1.6s ease-in-out infinite;
@@ -294,7 +296,7 @@
     </div>
 
     <div class="runtrack" id="runtrack" aria-hidden="true">
-      <div class="runner" id="runner">🏃</div>
+      <div class="runner" id="runner"><span class="runner-body">🏃</span></div>
       <div class="goal">🏁</div>
     </div>
 
@@ -560,27 +562,51 @@
     totalBodyW = w;
 
     const data = [];
+    const range = document.createRange();
     for (let si = 0; si < sentences.length; si++) {
       const text = sentences[si].text;
-      let html = "";
-      for (let i = 0; i < text.length; i++) {
-        html += '<span class="ch">' + escapeHtml(text[i] === " " ? "\u00A0" : text[i]) + "</span>";
-      }
-      measurer.innerHTML = html;
-      const spans = measurer.querySelectorAll(".ch");
+      measurer.textContent = text;
+      const node = measurer.firstChild;
       const lines = [];
-      let cur = null;
-      spans.forEach((sp, idx) => {
-        const top = sp.offsetTop;
-        if (!cur || top - cur.top > 2) {
-          cur = { top: top, h: sp.offsetHeight, left: sp.offsetLeft, right: sp.offsetLeft + sp.offsetWidth, start: idx, end: idx };
-          lines.push(cur);
-        } else {
-          cur.right = sp.offsetLeft + sp.offsetWidth;
-          cur.h = Math.max(cur.h, sp.offsetHeight);
-          cur.end = idx;
+      if (node && text.length) {
+        const base = measurer.getBoundingClientRect();
+        range.selectNodeContents(node);
+        const rects = range.getClientRects();
+        // getClientRects\uB294 \uC904\uB9C8\uB2E4 \uBC15\uC2A4\uB97C \uB3CC\uB824\uC900\uB2E4. top\uC774 \uAC19\uC73C\uBA74 \uD55C \uC904\uB85C \uD569\uCE5C\uB2E4.
+        for (let i = 0; i < rects.length; i++) {
+          const r = rects[i];
+          if (r.width === 0 && r.height === 0) continue;
+          const top = r.top - base.top;
+          const last = lines[lines.length - 1];
+          if (last && Math.abs(top - last.top) <= 2) {
+            last.left = Math.min(last.left, r.left - base.left);
+            last.right = Math.max(last.right, r.right - base.left);
+            last.h = Math.max(last.h, r.height);
+          } else {
+            lines.push({ top: top, h: r.height, left: r.left - base.left, right: r.right - base.left, start: 0, end: text.length - 1 });
+          }
         }
-      });
+        // \uAC01 \uC904\uC758 \uC2DC\uC791 \uAE00\uC790 \uC778\uB371\uC2A4\uB97C \uC774\uBD84 \uD0D0\uC0C9\uC73C\uB85C \uCC3E\uB294\uB2E4. (\uAE00\uC790 \uB2E8\uC704 \uB178\uB4DC \uC0DD\uC131 \uC5C6\uC74C)
+        const charTop = (i) => {
+          range.setStart(node, i);
+          range.setEnd(node, Math.min(i + 1, text.length));
+          return range.getBoundingClientRect().top - base.top;
+        };
+        for (let k = 1; k < lines.length; k++) {
+          let lo = lines[k - 1].start + 1, hi = text.length - 1, ans = hi;
+          const target = lines[k].top - 1;
+          while (lo <= hi) {
+            const mid = (lo + hi) >> 1;
+            if (charTop(mid) >= target) { ans = mid; hi = mid - 1; }
+            else lo = mid + 1;
+          }
+          lines[k].start = ans;
+        }
+        for (let k = 0; k < lines.length; k++) {
+          lines[k].end = (k < lines.length - 1) ? lines[k + 1].start - 1 : text.length - 1;
+          if (lines[k].end < lines[k].start) lines[k].end = lines[k].start;
+        }
+      }
       data.push({ lines: lines, height: measurer.scrollHeight });
     }
     return data;
@@ -588,22 +614,23 @@
 
   function rebuildMinimap() {
     paraData = measureLines();
-    updateMinimap();
+    layoutMinimap();   // 막대 DOM은 측정/리사이즈 때 한 번만 그린다
+    updateMinimap();   // 진행 상태(클래스)만 갱신
   }
 
-  function updateMinimap() {
-    if (getComputedStyle(minimap).display === "none") return;
-    if (!paraData || !totalBodyW) return;
-
+  // 미니맵 막대를 한 번만 그려 둔다. 막대마다 문단/시작/끝 인덱스를 data-속성에 보관.
+  function layoutMinimap() {
+    if (getComputedStyle(minimap).display === "none" || !paraData || !totalBodyW) {
+      miniInner.innerHTML = ""; return;
+    }
     const lineH = parseFloat(getComputedStyle(display).lineHeight) || 30;
     const paraGap = lineH * 0.8;
-
     let totalH = 0;
     for (let i = 0; i < paraData.length; i++) {
       totalH += paraData[i].height;
       if (i < paraData.length - 1) totalH += paraGap;
     }
-    if (totalH <= 0) return;
+    if (totalH <= 0) { miniInner.innerHTML = ""; return; }
 
     const innerW = miniScroll.clientWidth || (minimap.clientWidth - 20);
     let scale = innerW / totalBodyW;   // 폭 기준 — 막대 크기 일정
@@ -613,31 +640,45 @@
     miniInner.style.height = (totalH * scale) + "px";
     miniInner._paraGap = paraGap;
 
-    const curPara = order[orderIdx];   // 강조할 문단(원본 인덱스)
-    const typedLen = Math.min(capture.value.length, current().text.length);
-
-    let yAcc = 0;
-    let html = "";
+    let yAcc = 0, html = "";
     for (let pIdx = 0; pIdx < paraData.length; pIdx++) {
       const p = paraData[pIdx];
       for (let li = 0; li < p.lines.length; li++) {
         const ln = p.lines[li];
-        let cls = doneSet.has(pIdx) ? "done" : "left";
-        if (pIdx === curPara) {
-          if (ln.end < typedLen) cls = "done";
-          else if (ln.start <= typedLen && typedLen <= ln.end) cls = "current";
-          else cls = doneSet.has(pIdx) ? "done" : "left";
-        }
         const left = ln.left * scale;
         const top = (yAcc + ln.top) * scale;
         const w = Math.max(3, (ln.right - ln.left) * scale);
         const h = Math.max(2.5, ln.h * scale * 0.5);
         const off = (ln.h * scale - h) / 2;
-        html += '<div class="mini-line ' + cls + '" style="left:' + left + 'px;top:' + (top + off) + 'px;width:' + w + 'px;height:' + h + 'px"></div>';
+        html += '<div class="mini-line left" data-p="' + pIdx + '" data-s="' + ln.start + '" data-e="' + ln.end +
+          '" style="left:' + left + 'px;top:' + (top + off) + 'px;width:' + w + 'px;height:' + h + 'px"></div>';
       }
       yAcc += p.height + paraGap;
     }
     miniInner.innerHTML = html;
+  }
+
+  // 키 입력마다 호출되지만 innerHTML을 다시 만들지 않고 막대 클래스만 바꾼다.
+  function updateMinimap() {
+    if (!paraData) return;
+    const els = miniInner.children;
+    if (!els.length) return;
+    const curPara = order[orderIdx];
+    const typedLen = Math.min(capture.value.length, current().text.length);
+    for (let i = 0; i < els.length; i++) {
+      const el = els[i];
+      const p = +el.dataset.p;
+      let cls;
+      if (p === curPara) {
+        const s = +el.dataset.s, e = +el.dataset.e;
+        if (e < typedLen) cls = "mini-line done";
+        else if (s <= typedLen && typedLen <= e) cls = "mini-line current";
+        else cls = doneSet.has(p) ? "mini-line done" : "mini-line left";
+      } else {
+        cls = doneSet.has(p) ? "mini-line done" : "mini-line left";
+      }
+      if (el.className !== cls) el.className = cls;
+    }
 
     // 현재 줄이 미니맵 보이는 범위를 벗어나면 가운데로 스크롤
     const curEl = miniInner.querySelector(".mini-line.current");
@@ -904,9 +945,9 @@
       }
     })();
     rebuildMinimap();
+    // 폰트가 늦게 로드되면 글자폭이 달라지므로 그때 한 번만 다시 측정한다.
     if (document.fonts && document.fonts.ready) document.fonts.ready.then(rebuildMinimap);
     setTimeout(() => capture.focus(), 100);
-    setTimeout(rebuildMinimap, 300);
   }
 
   // 이 브라우저에 저장된 데이터가 없으면(=새 기기/브라우저) 같은 폴더의 sentences.json을
