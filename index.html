@@ -1162,16 +1162,39 @@
     reader.readAsText(f, "utf-8");
     e.target.value = "";   // 같은 파일 다시 선택 가능하게
   });
+  // 본문을 장면 목록으로 변환. '# 제목' 줄이 있으면 그 줄마다 작품(출처)을 나눈다.
+  // (내보내기 .txt 형식과 왕복이 맞는다.) 헤더가 없으면 제목/작가 입력칸을 출처로 쓴다.
+  function parseBodyToItems(body, title, author) {
+    const lines = body.replace(/\r/g, "").split("\n");
+    const hasHeaders = lines.some(l => /^#\s+/.test(l));
+    const fieldSrc = (title && author) ? (title + " · " + author) : (title || author || "");
+    const items = [];
+    if (!hasHeaders) {
+      for (const t of splitScenes(body)) items.push({ text: t, source: fieldSrc });
+      return items;
+    }
+    let curSrc = fieldSrc, buf = [];
+    const flush = () => {
+      for (const t of splitScenes(buf.join("\n"))) items.push({ text: t, source: curSrc });
+      buf = [];
+    };
+    for (const l of lines) {
+      const m = l.match(/^#\s+(.*)$/);
+      if (m) { flush(); curSrc = m[1].trim(); }
+      else buf.push(l);
+    }
+    flush();
+    return items;
+  }
   $("addTextBtn").addEventListener("click", () => {
     const msg = $("msg");
     const body = $("bodyInput").value;
     const title = $("srcTitle").value.trim();
     const author = $("srcAuthor").value.trim();
     if (!body.trim()) { msg.className = "msg err"; msg.textContent = "본문을 붙여넣어 주세요."; return; }
-    const segs = splitScenes(body);
-    if (!segs.length) { msg.className = "msg err"; msg.textContent = "등록할 장면이 없습니다."; return; }
-    const src = (title && author) ? (title + " · " + author) : (title || author || "");
-    const items = segs.map(t => ({ text: t, source: src }));
+    const items = parseBodyToItems(body, title, author);
+    if (!items.length) { msg.className = "msg err"; msg.textContent = "등록할 장면이 없습니다."; return; }
+    const added = items.length;
     const append = $("appendChk").checked;
     if (!append && sentences.length && !confirm("'이어붙이기'가 꺼져 있어 기존 " + sentences.length + "개 문단을 모두 지우고 교체합니다. 계속할까요?")) return;
     sentences = normalize(append ? sentences.concat(items) : items);
@@ -1179,9 +1202,10 @@
     saveSentences(); buildOrder(); resetCurrent(); rebuildMinimap(); saveProgress();
     msg.className = "msg ok";
     msg.textContent = append
-      ? ("장면 " + segs.length + "개를 추가했습니다. (전체 " + sentences.length + "개)")
-      : ("장면 " + segs.length + "개로 교체했습니다.");
+      ? ("장면 " + added + "개를 추가했습니다. (전체 " + sentences.length + "개)")
+      : ("장면 " + added + "개로 교체했습니다.");
     $("bodyInput").value = "";
+    $("bodyFileName").textContent = "파일을 고르면 위 칸에 자동으로 채워집니다";
   });
 
   $("exportBtn").addEventListener("click", () => {
