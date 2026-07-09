@@ -426,8 +426,9 @@
 
 빈 줄(엔터 두 번)로 장면이 나뉩니다."></textarea>
       <div class="file-row">
-        <label class="btn file-btn">📄 텍스트 파일(.txt) 선택<input type="file" id="bodyFile" accept=".txt,text/plain" hidden></label>
-        <span class="file-name" id="bodyFileName">파일을 고르면 위 칸에 자동으로 채워집니다</span>
+        <button type="button" class="btn file-btn" id="bodyFileBtn">📄 텍스트 파일(.txt) 올리기</button>
+        <input type="file" id="bodyFile" accept=".txt,text/plain" style="display:none">
+        <span class="file-name" id="bodyFileName">파일을 올리면 위 칸에 자동으로 채워집니다</span>
       </div>
       <label class="chk"><input type="checkbox" id="appendChk" checked> 기존 작품들은 그대로 두고 새 글로 추가 &nbsp;·&nbsp; <b>체크 해제 시 기존 전체 삭제 후 교체</b></label>
       <div class="modal-actions">
@@ -1148,6 +1149,7 @@
     return segs;
   }
   // .txt 파일을 골라 본문 칸을 채운다 (이후 '본문으로 추가'가 장면 분할·등록을 처리).
+  $("bodyFileBtn").addEventListener("click", () => $("bodyFile").click());
   $("bodyFile").addEventListener("change", (e) => {
     const f = e.target.files && e.target.files[0];
     if (!f) return;
