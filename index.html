@@ -272,6 +272,9 @@
   .export-row { display: flex; align-items: center; gap: 13px; margin-bottom: 11px; flex-wrap: wrap; }
   .export-row .btn { flex-shrink: 0; }
   .export-desc { flex: 1; min-width: 190px; font-size: 11px; line-height: 1.55; color: var(--paper-mute); }
+  .file-row { display: flex; align-items: center; gap: 12px; margin-top: 10px; flex-wrap: wrap; }
+  .file-btn { flex-shrink: 0; cursor: pointer; }
+  .file-name { flex: 1; min-width: 160px; font-size: 11px; color: var(--paper-mute); }
 
   /* ---- 목차 ---- */
   .list-modal { width: min(640px, 100%); }
@@ -422,6 +425,10 @@
       <textarea id="bodyInput" placeholder="여기에 글 본문을 붙여넣으세요.
 
 빈 줄(엔터 두 번)로 장면이 나뉩니다."></textarea>
+      <div class="file-row">
+        <label class="btn file-btn">📄 텍스트 파일(.txt) 선택<input type="file" id="bodyFile" accept=".txt,text/plain" hidden></label>
+        <span class="file-name" id="bodyFileName">파일을 고르면 위 칸에 자동으로 채워집니다</span>
+      </div>
       <label class="chk"><input type="checkbox" id="appendChk" checked> 기존 작품들은 그대로 두고 새 글로 추가 &nbsp;·&nbsp; <b>체크 해제 시 기존 전체 삭제 후 교체</b></label>
       <div class="modal-actions">
         <button class="btn solid" id="addTextBtn">본문으로 추가</button>
@@ -1140,6 +1147,21 @@
     if (buf) { if (segs.length) segs[segs.length - 1] += "\n" + buf; else segs.push(buf); }
     return segs;
   }
+  // .txt 파일을 골라 본문 칸을 채운다 (이후 '본문으로 추가'가 장면 분할·등록을 처리).
+  $("bodyFile").addEventListener("change", (e) => {
+    const f = e.target.files && e.target.files[0];
+    if (!f) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      $("bodyInput").value = String(reader.result || "");
+      $("bodyFileName").textContent = f.name + " — 제목·작가 확인 후 '본문으로 추가'를 누르세요";
+      $("msg").className = "msg ok";
+      $("msg").textContent = "텍스트 파일을 불러왔습니다. 내용 확인 후 '본문으로 추가'를 누르세요.";
+    };
+    reader.onerror = () => { $("msg").className = "msg err"; $("msg").textContent = "파일을 읽지 못했습니다."; };
+    reader.readAsText(f, "utf-8");
+    e.target.value = "";   // 같은 파일 다시 선택 가능하게
+  });
   $("addTextBtn").addEventListener("click", () => {
     const msg = $("msg");
     const body = $("bodyInput").value;
