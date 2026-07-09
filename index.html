@@ -610,10 +610,30 @@
     dispText = target;
   }
   // \uD0A4 \uC785\uB825\uB9C8\uB2E4: \uC804\uCCB4\uB97C \uB2E4\uC2DC \uADF8\uB9AC\uC9C0 \uC54A\uACE0 \uBC14\uB010 \uAE00\uC790 span\uB9CC \uAC31\uC2E0\uD55C\uB2E4(\uBCF4\uD1B5 1~2\uAC1C).
+  // 키보드로 치기 어려운 글자(한자·생략부호 …)는 커서가 닿으면 자동으로 채워 준다.
+  function isHardChar(ch) {
+    if (ch === "…") return true;                 // … 생략부호
+    const c = ch.charCodeAt(0);
+    return (c >= 0x3400 && c <= 0x9FFF) || (c >= 0xF900 && c <= 0xFAFF); // 한자(CJK)
+  }
+  function autoFillHard(target) {
+    if (finished) return;
+    const v = capture.value;
+    let i = v.length;
+    while (i < target.length) {
+      const ch = target[i];
+      const hard = isHardChar(ch)
+        || (ch === " " && i > v.length && i + 1 < target.length && isHardChar(target[i - 1]) && isHardChar(target[i + 1]));
+      if (!hard) break;
+      i++;
+    }
+    if (i > v.length) capture.value = v + target.slice(v.length, i);
+  }
   function render() {
     const target = current().text;
-    const typed = capture.value;
     if (dispText !== target) buildDisplay(target);
+    if (!composing) autoFillHard(target);   // 한자/생략부호 자동 채움
+    const typed = capture.value;
     const tl = typed.length, gl = target.length;
     for (let i = 0; i < gl; i++) {
       let cls, ch;
