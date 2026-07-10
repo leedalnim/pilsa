@@ -540,7 +540,9 @@
   let doneSet = new Set();
   let composing = false, startTime = null, timerId = null, totalStrokes = 0, finished = false;
   let typingMs = 0, lastInputTime = null;      // 실제로 친 누적 시간(ms), 마지막 입력 시각
-  const IDLE_MS = 1500;                          // 이보다 오래 멈추면 '쉬는 중'으로 보고 시간/속도 정지
+  let strokeLog = [], recentCpm = 0;           // 최근 구간 타수 기록 → 현재 속도(타/분)
+  const IDLE_MS = 900;                           // 이보다 오래 멈추면 '쉬는 중'(속도·달리기 정지)
+  const SPEED_WINDOW_MS = 4000;                  // 현재 속도는 최근 4초 구간으로 계산(폭발값 방지)
 
   const $ = (id) => document.getElementById(id);
   const display = $("display");
@@ -921,16 +923,26 @@
     $("charCount").textContent = typedLen + " / " + target.length;
     $("percent").textContent = Math.round(prog) + "%";
 
-    // 쉬는 중이면 시간/속도를 그 값에서 멈춘다(누적 활자시간만 사용).
+    // 쉬는 중이면 시간·속도를 그 값에서 멈춘다.
     const now = performance.now();
     const idle = lastInputTime === null || (now - lastInputTime > IDLE_MS);
     const effSec = (idle ? typingMs : typingMs + (now - lastInputTime)) / 1000;
     $("time").innerHTML = effSec.toFixed(1) + '<small>초</small>';
     const liveStrokes = correctStrokesInCurrent();
-    const cpm = effSec > 0.3 ? Math.round((liveStrokes / effSec) * 60) : 0;
-    $("cpm").innerHTML = cpm + '<small>타/분</small>';
-    $("strokes").textContent = (totalStrokes + liveStrokes).toLocaleString();
-    updateRunner(idle ? 0 : cpm, prog);   // 쉬는 중이면 캐릭터도 정지
+    const totStrokes = totalStrokes + liveStrokes;
+    // 현재 속도 = 최근 구간의 타수 증가분으로 계산(누적 아님). 쉬는 중이면 마지막 값 유지.
+    if (!idle) {
+      strokeLog.push([now, totStrokes]);
+      while (strokeLog.length && strokeLog[0][0] < now - SPEED_WINDOW_MS) strokeLog.shift();
+      if (strokeLog.length >= 2) {
+        const a = strokeLog[0], b = strokeLog[strokeLog.length - 1];
+        const dt = (b[0] - a[0]) / 1000;
+        if (dt >= 0.25) recentCpm = Math.max(0, Math.round((b[1] - a[1]) / dt * 60));
+      }
+    }
+    $("cpm").innerHTML = recentCpm + '<small>타/분</small>';
+    $("strokes").textContent = totStrokes.toLocaleString();
+    updateRunner(idle ? 0 : recentCpm, prog);   // 쉬는 중이면 캐릭터도 정지
   }
 
   // 타속(타/분)에 맞춰 캐릭터를 달리게 한다. 위치는 진행률, 다리 속도는 타속.
@@ -1018,6 +1030,7 @@
     capture.value = "";
     composing = false; finished = false; startTime = null;
     typingMs = 0; lastInputTime = null;   // 시간/속도 초기화
+    strokeLog = []; recentCpm = 0;
     stopTimer();
     card.classList.remove("done");
     if (runtrack) runtrack.classList.remove("jog", "run", "sprint", "cleared", "running");
