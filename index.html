@@ -296,12 +296,10 @@
   }
   .list-item.is-done .list-num { background: var(--gold); border-color: var(--gold); color: var(--ink); font-weight: 700; }
   .list-item.current .list-num { border-color: #e6c987; color: #e6c987; }
-  /* 작품 탭: 가로로 늘어놓고, 많아지면 좌우 스크롤 */
-  .list-tabs { display: flex; gap: 7px; overflow-x: auto; overflow-y: hidden; padding: 2px 0 12px; margin-top: 6px; scrollbar-width: thin; }
-  .list-tabs::-webkit-scrollbar { height: 5px; }
-  .list-tabs::-webkit-scrollbar-thumb { background: rgba(201,164,92,0.4); border-radius: 5px; }
+  /* 작품 탭: 여러 줄로 줄바꿈해 한눈에 보이게 (가로 스크롤 없음). 많으면 세로 스크롤 */
+  .list-tabs { display: flex; flex-wrap: wrap; gap: 7px; padding: 2px 0 12px; margin-top: 6px; max-height: 30vh; overflow-y: auto; }
   .list-tab {
-    flex: 0 0 auto; max-width: 230px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    flex: 0 1 auto; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     padding: 8px 15px; border-radius: 999px; border: 1px solid var(--line); background: var(--ink);
     color: var(--paper-dim); font-family: var(--serif); font-size: 13px; cursor: pointer; transition: all .15s ease;
   }
@@ -1256,13 +1254,26 @@
     reader.readAsText(f, "utf-8");
     e.target.value = "";   // 같은 파일 다시 선택 가능하게
   });
-  // 본문을 장면 목록으로 변환. '# 제목' 줄이 있으면 그 줄마다 작품(출처)을 나눈다.
-  // (내보내기 .txt 형식과 왕복이 맞는다.) 헤더가 없으면 제목/작가 입력칸을 출처로 쓴다.
+  // 본문을 장면 목록으로 변환.
+  //  · 제목 칸을 채우면 → 그게 하나의 작품(탭)이 되고, '# 헤더'는 그 안의 장(章) 제목 = 독립 장면.
+  //  · 제목 칸을 비우고 '# 헤더'만 있으면 → 헤더마다 새 작품(탭).
   function parseBodyToItems(body, title, author) {
     const lines = body.replace(/\r/g, "").split("\n");
     const hasHeaders = lines.some(l => /^#{1,6}\s+/.test(l));
     const fieldSrc = (title && author) ? (title + " · " + author) : (title || author || "");
     const items = [];
+    if (title && hasHeaders) {
+      // 한 작품(탭) 안에 여러 장. # 헤더는 짧아도 합쳐지지 않는 독립 '장 제목' 장면으로 넣는다.
+      let buf = [];
+      const flush = () => { for (const t of splitScenes(buf.join("\n"))) items.push({ text: t, source: fieldSrc }); buf = []; };
+      for (const l of lines) {
+        const m = l.match(/^#{1,6}\s+(.*)$/);
+        if (m) { flush(); const h = m[1].trim(); if (h) items.push({ text: h, source: fieldSrc }); }
+        else buf.push(l);
+      }
+      flush();
+      return items;
+    }
     if (!hasHeaders) {
       for (const t of splitScenes(body)) items.push({ text: t, source: fieldSrc });
       return items;
@@ -1273,7 +1284,7 @@
       buf = [];
     };
     for (const l of lines) {
-      const m = l.match(/^#{1,6}\s+(.*)$/);            // # ~ ###### 헤더 = 새 작품(탭)
+      const m = l.match(/^#{1,6}\s+(.*)$/);            // 제목칸 비었을 때: 헤더마다 새 작품(탭)
       if (m) { flush(); const h = m[1].trim(); curSrc = author ? (h + " · " + author) : h; }
       else buf.push(l);
     }
