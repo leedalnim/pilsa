@@ -308,7 +308,9 @@
   .list-tab:hover { border-color: var(--gold); color: var(--gold); }
   .list-tab.active { background: var(--gold); border-color: var(--gold); color: var(--ink); font-weight: 700; }
   .list-tab .tab-badge { font-size: 10px; opacity: .75; margin-left: 6px; font-variant-numeric: tabular-nums; }
-  .list-subhead { font-size: 10px; color: var(--paper-mute); letter-spacing: .08em; padding: 2px 2px 9px; font-variant-numeric: tabular-nums; }
+  .list-subhead { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 10px; color: var(--paper-mute); letter-spacing: .08em; padding: 2px 2px 9px; font-variant-numeric: tabular-nums; }
+  .list-del { flex-shrink: 0; font-size: 10px; letter-spacing: 0; padding: 5px 11px; border-radius: 7px; background: transparent; border: 1px solid var(--line); color: var(--paper-mute); cursor: pointer; transition: all .15s ease; }
+  .list-del:hover { border-color: #d4675f; color: #d4675f; }
   .list-text { flex: 1; min-width: 0; }
   .list-snippet {
     font-family: var(--serif); font-size: 13px; line-height: 1.5; color: var(--paper);
@@ -1135,7 +1137,8 @@
     if (!g) { body.innerHTML = ""; return; }
     const curPara = order[orderIdx];
     const doneCount = g.items.reduce((n, i) => n + (doneSet.has(i) ? 1 : 0), 0);
-    let html = '<div class="list-subhead">' + g.items.length + '장 · 완독 ' + doneCount + '</div>';
+    let html = '<div class="list-subhead"><span>' + g.items.length + '장 · 완독 ' + doneCount
+             + '</span><button class="list-del" type="button">🗑 이 작품 삭제</button></div>';
     for (let s = 0; s < g.items.length; s++) {
       const i = g.items[s];
       const t = sentences[i].text;
@@ -1176,7 +1179,27 @@
     listActiveIdx = +tab.dataset.gi;
     renderListBody();
   });
+  // 현재 탭(작품)의 모든 장면을 삭제하고 인덱스를 다시 정렬한다.
+  function deleteActiveWork() {
+    const g = listGroups[listActiveIdx];
+    if (!g) return;
+    if (!confirm("'" + g.src + "' 작품(" + g.items.length + "장)을 삭제합니다. 되돌릴 수 없어요. 계속할까요?")) return;
+    const remove = new Set(g.items);
+    const oldToNew = {}, next = [];
+    for (let i = 0; i < sentences.length; i++) {
+      if (remove.has(i)) continue;
+      oldToNew[i] = next.length; next.push(sentences[i]);
+    }
+    const newDone = new Set();
+    doneSet.forEach((i) => { if (oldToNew[i] !== undefined) newDone.add(oldToNew[i]); });
+    sentences = next; doneSet = newDone;
+    if (!sentences.length) { sentences = DEFAULT_SENTENCES.slice(); doneSet = new Set(); }
+    saveSentences(); buildOrder(); orderIdx = 0; resetCurrent(); rebuildMinimap(); saveProgress();
+    if (!sentences.length) { listOverlay.classList.remove("open"); return; }
+    listActiveIdx = 0; buildList();
+  }
   $("listBody").addEventListener("click", (e) => {
+    if (e.target.closest(".list-del")) { deleteActiveWork(); return; }
     const btn = e.target.closest(".list-item");
     if (!btn) return;
     const i = +btn.dataset.i;
