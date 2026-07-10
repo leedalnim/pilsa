@@ -1056,7 +1056,7 @@
     $("counter").textContent = "문단 " + pos + " / " + total + (workDone ? " · 완독 " + workDone : "");
     $("miniLabel").textContent = pos + " / " + total;
     const src = current().source;
-    $("source").textContent = src ? "— " + src : "";
+    $("source").textContent = src || "";
   }
   function go(delta) { orderIdx = (orderIdx + delta + sentences.length) % sentences.length; resetCurrent(); saveProgress(); }
   window.addEventListener("beforeunload", saveProgress);
