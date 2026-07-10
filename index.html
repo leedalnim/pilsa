@@ -281,7 +281,7 @@
   .list-modal .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; vertical-align: middle; margin: 0 2px; }
   .list-modal .dot.done { background: var(--gold); }
   .list-modal .dot.now { background: #e6c987; box-shadow: 0 0 0 2px rgba(230,201,135,0.4); }
-  .list-body { display: flex; flex-direction: column; gap: 6px; max-height: 62vh; overflow-y: auto; margin: 4px -6px 0; padding: 0 6px; }
+  .list-body { display: flex; flex-direction: column; gap: 6px; margin: 4px 0 0; }
   .list-item {
     display: flex; align-items: flex-start; gap: 11px; width: 100%; text-align: left;
     background: var(--ink); border: 1px solid var(--line); border-radius: 10px;
@@ -297,15 +297,15 @@
   .list-item.is-done .list-num { background: var(--gold); border-color: var(--gold); color: var(--ink); font-weight: 700; }
   .list-item.current .list-num { border-color: #e6c987; color: #e6c987; }
   /* 작품 탭: 여러 줄로 줄바꿈해 한눈에 보이게 (가로 스크롤 없음). 많으면 세로 스크롤 */
-  .list-tabs { display: flex; flex-wrap: wrap; gap: 7px; padding: 2px 0 12px; margin-top: 6px; max-height: 30vh; overflow-y: auto; }
-  .list-tab {
-    flex: 0 1 auto; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-    padding: 8px 15px; border-radius: 999px; border: 1px solid var(--line); background: var(--ink);
-    color: var(--paper-dim); font-family: var(--serif); font-size: 13px; cursor: pointer; transition: all .15s ease;
+  /* 작품 선택: 드롭다운 (몇 개든 한 줄, 스크롤 하나만) */
+  .list-select {
+    width: 100%; margin: 8px 0 4px; padding: 12px 40px 12px 15px; border-radius: 10px;
+    background: var(--ink-2); border: 1px solid var(--line); color: var(--paper);
+    font-family: var(--serif); font-size: 14px; cursor: pointer; -webkit-appearance: none; appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' fill='none' stroke='%23c9a45c' stroke-width='1.6'/%3E%3C/svg%3E");
+    background-repeat: no-repeat; background-position: right 15px center; background-size: 12px;
   }
-  .list-tab:hover { border-color: var(--gold); color: var(--gold); }
-  .list-tab.active { background: var(--gold); border-color: var(--gold); color: var(--ink); font-weight: 700; }
-  .list-tab .tab-badge { font-size: 10px; opacity: .75; margin-left: 6px; font-variant-numeric: tabular-nums; }
+  .list-select:focus { outline: none; border-color: var(--gold); }
   .list-subhead { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 10px; color: var(--paper-mute); letter-spacing: .08em; padding: 2px 2px 9px; font-variant-numeric: tabular-nums; }
   .list-del { flex-shrink: 0; font-size: 10px; letter-spacing: 0; padding: 5px 11px; border-radius: 7px; background: transparent; border: 1px solid var(--line); color: var(--paper-mute); cursor: pointer; transition: all .15s ease; }
   .list-del:hover { border-color: #d4675f; color: #d4675f; }
@@ -404,8 +404,8 @@
   <div class="overlay" id="listOverlay">
     <div class="modal list-modal">
       <h2>목차 — 타이핑 할 글 고르기</h2>
-      <p>위 탭에서 작품을 고르고, 장면을 누르면 이동합니다. <span class="dot done"></span> 완독 · <span class="dot now"></span> 현재</p>
-      <div class="list-tabs" id="listTabs"></div>
+      <p>작품을 고르고, 장면을 누르면 이동합니다. <span class="dot done"></span> 완독 · <span class="dot now"></span> 현재</p>
+      <select id="listSelect" class="list-select"></select>
       <div class="list-body" id="listBody"></div>
       <div class="modal-actions">
         <button class="btn" id="listCloseBtn">닫기</button>
@@ -1115,7 +1115,7 @@
 
   // ---- 목차: 상단 탭으로 작품을 고르고, 장면을 누르면 이동 ----
   const listOverlay = $("listOverlay");
-  const listTabs = $("listTabs");
+  const listSelect = $("listSelect");
   let listGroups = [], listActiveIdx = 0;
 
   function computeGroups() {
@@ -1129,7 +1129,7 @@
   }
   // 선택된 작품(탭)의 장면 목록만 그린다.
   function renderListBody() {
-    [...listTabs.children].forEach((tab) => tab.classList.toggle("active", +tab.dataset.gi === listActiveIdx));
+    if (listSelect) listSelect.value = String(listActiveIdx);
     const g = listGroups[listActiveIdx];
     const body = $("listBody");
     if (!g) { body.innerHTML = ""; return; }
@@ -1155,26 +1155,21 @@
     listGroups = computeGroups();
     const curPara = order[orderIdx];
     listActiveIdx = Math.max(0, listGroups.findIndex((g) => g.items.indexOf(curPara) !== -1)); // 기본 = 현재 작품
-    let tabs = "";
+    let opts = "";
     for (let gi = 0; gi < listGroups.length; gi++) {
       const g = listGroups[gi];
       const doneCount = g.items.reduce((n, i) => n + (doneSet.has(i) ? 1 : 0), 0);
-      const badge = (doneCount === g.items.length) ? "✓" : (doneCount + "/" + g.items.length);
-      tabs += '<button class="list-tab" data-gi="' + gi + '">' + escapeHtml(g.src)
-            + '<span class="tab-badge">' + badge + '</span></button>';
+      const badge = (doneCount === g.items.length) ? " ✓" : "  (" + doneCount + "/" + g.items.length + ")";
+      opts += '<option value="' + gi + '">' + escapeHtml(g.src) + badge + '</option>';
     }
-    listTabs.innerHTML = tabs;
+    listSelect.innerHTML = opts;
     renderListBody();
-    const activeTab = listTabs.querySelector(".list-tab.active");
-    if (activeTab) activeTab.scrollIntoView({ inline: "center", block: "nearest" });
   }
   $("listBtn").addEventListener("click", () => { buildList(); listOverlay.classList.add("open"); });
   $("listCloseBtn").addEventListener("click", () => listOverlay.classList.remove("open"));
   listOverlay.addEventListener("click", (e) => { if (e.target === listOverlay) listOverlay.classList.remove("open"); });
-  listTabs.addEventListener("click", (e) => {
-    const tab = e.target.closest(".list-tab");
-    if (!tab) return;
-    listActiveIdx = +tab.dataset.gi;
+  listSelect.addEventListener("change", () => {
+    listActiveIdx = +listSelect.value;
     renderListBody();
   });
   // 현재 탭(작품)의 모든 장면을 삭제하고 인덱스를 다시 정렬한다.
