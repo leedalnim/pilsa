@@ -1043,8 +1043,14 @@
     capture.focus();
   }
   function refreshMeta() {
-    $("counter").textContent = "문단 " + (orderIdx + 1) + " / " + sentences.length + (doneSet.size ? " · 완독 " + doneSet.size : "");
-    $("miniLabel").textContent = (orderIdx + 1) + " / " + sentences.length;
+    // 카운터/미니맵 라벨을 '현재 작품' 기준으로 집계
+    const workIdxs = currentWorkIndices();
+    const curPara = order[orderIdx];
+    const pos = workIdxs.indexOf(curPara) + 1;
+    const total = workIdxs.length;
+    const workDone = workIdxs.reduce((n, i) => n + (doneSet.has(i) ? 1 : 0), 0);
+    $("counter").textContent = "문단 " + pos + " / " + total + (workDone ? " · 완독 " + workDone : "");
+    $("miniLabel").textContent = pos + " / " + total;
     const src = current().source;
     $("source").textContent = src ? "— " + src : "";
   }
