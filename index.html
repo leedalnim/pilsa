@@ -627,10 +627,15 @@
   }
   // \uD0A4 \uC785\uB825\uB9C8\uB2E4: \uC804\uCCB4\uB97C \uB2E4\uC2DC \uADF8\uB9AC\uC9C0 \uC54A\uACE0 \uBC14\uB010 \uAE00\uC790 span\uB9CC \uAC31\uC2E0\uD55C\uB2E4(\uBCF4\uD1B5 1~2\uAC1C).
   // 키보드로 치기 어려운 글자(한자·생략부호 …)는 커서가 닿으면 자동으로 채워 준다.
+  // 키보드로 바로 칠 수 있는 글자(ASCII·한글·공백)가 아니면 '못 치는 문자'로 보고 자동 채운다.
+  // 한자, … ※ — · 〈〉 「」 ○ 등 특수문자 전반 포함. 따옴표류는 nc로 정규화되어 직접 칠 수 있으므로 제외.
   function isHardChar(ch) {
-    if (ch === "…") return true;                 // … 생략부호
-    const c = ch.charCodeAt(0);
-    return (c >= 0x3400 && c <= 0x9FFF) || (c >= 0xF900 && c <= 0xFAFF); // 한자(CJK)
+    const c = nc(ch).charCodeAt(0);
+    if (c >= 0x20 && c <= 0x7E) return false;      // 기본 ASCII(영문·숫자·문장부호)
+    if (c >= 0xAC00 && c <= 0xD7A3) return false;  // 한글 음절
+    if (c >= 0x3130 && c <= 0x318F) return false;  // 한글 자모
+    if (ch === " " || ch === " " || ch === "\t") return false;
+    return true;
   }
   function autoFillHard(target) {
     if (finished) return;
