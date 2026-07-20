@@ -419,19 +419,23 @@
       <h2>문장 데이터 관리</h2>
 
       <h3 class="modal-sec">글 본문으로 추가</h3>
-      <p>기사·에세이 등 글 본문을 그대로 붙여넣고 제목·작가만 적으면, <b>줄바꿈(엔터)</b> 기준으로 장면을 나눠 자동 등록합니다. 맨 앞에 <b>#&nbsp;제목</b> 줄을 쓰면 작품(탭)으로 구분됩니다. JSON을 몰라도 됩니다.</p>
+      <p>글 본문을 붙여넣으면 문장/줄 단위로 나눠 자동 등록합니다. 맨 앞 <b>#&nbsp;제목</b> 줄은 작품(탭) 구분이 되고, 한 작품 안에 여러 장(章)도 넣을 수 있습니다.</p>
       <div class="field-row">
+        <select id="existWork" class="t-input"><option value="">＋ 새 작품으로 추가</option></select>
+      </div>
+      <div class="field-row" id="newWorkFields">
         <input id="srcTitle" class="t-input" placeholder="제목 (예: 복 있는 자들)" autocomplete="off" autocapitalize="off" spellcheck="false">
         <input id="srcAuthor" class="t-input" placeholder="작가 (예: 길란)" autocomplete="off" autocapitalize="off" spellcheck="false">
       </div>
       <textarea id="bodyInput" placeholder="여기에 글 본문을 붙여넣으세요.
 
-줄바꿈(엔터)마다 장면이 나뉩니다. 맨 앞 '# 제목' 줄은 작품 탭이 됩니다."></textarea>
+문장/줄 단위로 장면이 나뉩니다. 맨 앞 '# 제목' 줄은 작품 탭이 됩니다."></textarea>
       <div class="file-row">
         <button type="button" class="btn file-btn" id="bodyFileBtn">📄 텍스트 파일(.txt) 올리기</button>
         <input type="file" id="bodyFile" accept=".txt,text/plain" style="display:none">
         <span class="file-name" id="bodyFileName">파일을 올리면 위 칸에 자동으로 채워집니다</span>
       </div>
+      <label class="chk"><input type="checkbox" id="reflowChk" checked> PDF·책에서 복사한 글 정리 &nbsp;·&nbsp; <span style="opacity:.8">단어 중간에서 잘린 줄바꿈은 붙이고 문장 단위로 나눔</span></label>
       <label class="chk"><input type="checkbox" id="appendChk" checked> 기존 작품들은 그대로 두고 새 글로 추가 &nbsp;·&nbsp; <b>체크 해제 시 기존 전체 삭제 후 교체</b></label>
       <div class="modal-actions">
         <button class="btn solid" id="addTextBtn">본문으로 추가</button>
@@ -1114,7 +1118,7 @@
   $("fontUpBtn").addEventListener("click", () => setTypeScale(0.1));
 
   const overlay = $("overlay");
-  $("settingsBtn").addEventListener("click", () => { overlay.classList.add("open"); $("jsonInput").value = ""; $("msg").textContent = ""; $("msg").className = "msg"; });
+  $("settingsBtn").addEventListener("click", () => { overlay.classList.add("open"); refreshExistWork(); $("jsonInput").value = ""; $("msg").textContent = ""; $("msg").className = "msg"; });
   $("closeBtn").addEventListener("click", () => overlay.classList.remove("open"));
   overlay.addEventListener("click", (e) => { if (e.target === overlay) overlay.classList.remove("open"); });
 
@@ -1291,26 +1295,62 @@
     flush();
     return items;
   }
+  // PDF·책에서 복사한 글 정리: 단어 중간에서 잘린 줄바꿈은 붙이고(양옆 공백 있으면 단어 경계=띄움),
+  // 빈 줄은 무시해 이어붙인 뒤, 문장 끝(. ? ! …)마다 새 줄로 나눈다. '# 제목' 줄은 그대로 둔다.
+  function reflowText(raw) {
+    const lines = raw.replace(/\r/g, "").split("\n");
+    const paras = []; let cur = "";
+    const flush = () => { if (cur.trim()) paras.push(cur.trim()); cur = ""; };
+    for (const ln of lines) {
+      if (/^#{1,6}\s+/.test(ln)) { flush(); paras.push(ln.trim()); continue; }
+      if (ln.trim() === "") continue;
+      if (cur === "") { cur = ln; continue; }
+      const boundary = /[ \t]$/.test(cur) || /^[ \t]/.test(ln);
+      cur = cur.replace(/[ \t]+$/, "") + (boundary ? " " : "") + ln.replace(/^[ \t]+/, "");
+    }
+    flush();
+    const out = [];
+    for (const p of paras) {
+      if (/^#{1,6}\s+/.test(p)) { out.push(p); continue; }
+      const withBreaks = p.replace(/([.?!…]+["'”’」』)\]]*)\s+/g, "$1\n");
+      for (const s of withBreaks.split("\n")) { const t = s.trim(); if (t) out.push(t); }
+    }
+    return out.join("\n");
+  }
+  // 기존 작품 드롭다운 채우기 + 새 작품 입력칸 토글
+  function refreshExistWork() {
+    const sel = $("existWork"); if (!sel) return;
+    const prev = sel.value;
+    let opts = '<option value="">＋ 새 작품으로 추가</option>';
+    for (const g of computeGroups()) opts += '<option value="' + escapeHtml(g.src) + '">' + escapeHtml(g.src) + '</option>';
+    sel.innerHTML = opts;
+    sel.value = [...sel.options].some(o => o.value === prev) ? prev : "";
+    $("newWorkFields").style.display = sel.value ? "none" : "";
+  }
+  $("existWork").addEventListener("change", () => { $("newWorkFields").style.display = $("existWork").value ? "none" : ""; });
   $("addTextBtn").addEventListener("click", () => {
     const msg = $("msg");
-    const body = $("bodyInput").value;
-    const title = $("srcTitle").value.trim();
-    const author = $("srcAuthor").value.trim();
+    let body = $("bodyInput").value;
     if (!body.trim()) { msg.className = "msg err"; msg.textContent = "본문을 붙여넣어 주세요."; return; }
+    if ($("reflowChk").checked) body = reflowText(body);
+    const existSrc = $("existWork").value;                       // 기존 작품에 이어붙이기
+    const title = existSrc || $("srcTitle").value.trim();
+    const author = existSrc ? "" : $("srcAuthor").value.trim();
     const items = parseBodyToItems(body, title, author);
     if (!items.length) { msg.className = "msg err"; msg.textContent = "등록할 장면이 없습니다."; return; }
     const added = items.length;
-    const append = $("appendChk").checked;
+    const append = existSrc ? true : $("appendChk").checked;     // 이어붙이기는 항상 추가
     if (!append && sentences.length && !confirm("'이어붙이기'가 꺼져 있어 기존 " + sentences.length + "개 문단을 모두 지우고 교체합니다. 계속할까요?")) return;
     sentences = normalize(append ? sentences.concat(items) : items);
     if (!append) clearProgress();
     saveSentences(); buildOrder(); resetCurrent(); rebuildMinimap(); saveProgress();
     msg.className = "msg ok";
-    msg.textContent = append
-      ? ("장면 " + added + "개를 추가했습니다. (전체 " + sentences.length + "개)")
-      : ("장면 " + added + "개로 교체했습니다.");
+    msg.textContent = existSrc
+      ? ("'" + existSrc + "'에 장면 " + added + "개를 이어 붙였습니다.")
+      : (append ? ("장면 " + added + "개를 추가했습니다. (전체 " + sentences.length + "개)") : ("장면 " + added + "개로 교체했습니다."));
     $("bodyInput").value = "";
     $("bodyFileName").textContent = "파일을 고르면 위 칸에 자동으로 채워집니다";
+    refreshExistWork();
   });
 
   $("exportBtn").addEventListener("click", () => {
