@@ -1021,7 +1021,10 @@
     const typed = capture.value;
     if (!composing && typed.length === target.length && nstr(typed) === nstr(target)) {
       finished = true; stopTimer();
-      totalStrokes += correctStrokesInCurrent();
+      const sceneStrokes = correctStrokesInCurrent();
+      const sceneSec = typingMs / 1000;                 // 이 장면 실제 친 시간(쉬는 시간 제외)
+      const avgCpm = sceneSec >= 0.3 ? Math.round(sceneStrokes / sceneSec * 60) : recentCpm;
+      totalStrokes += sceneStrokes;
       card.classList.add("done");
       if (runner && runtrack && runnerBob) {    // 결승선에서 깡총깡총
         runner.style.transform = "translateX(" + Math.round(0.88 * (trackW || runtrack.clientWidth || 1)) + "px)";
@@ -1031,6 +1034,10 @@
       }
       burstConfetti();
       $("strokes").textContent = totalStrokes.toLocaleString();
+      $("cpm").innerHTML = avgCpm + '<small>타/분</small>';       // 속도 칸을 이 장면 '평균'으로 전환
+      const cpmLbl = $("cpm").parentElement.querySelector(".lbl");
+      if (cpmLbl) cpmLbl.textContent = "평균 속도";
+      showToast("🎉 완주! 이 장면 평균 " + avgCpm + " 타/분");
       doneSet.add(order[orderIdx]);
       saveProgress();
       refreshMeta();
@@ -1045,6 +1052,8 @@
     strokeLog = []; recentCpm = 0;
     prevRenderLen = 0;                     // 삭제 감지 기준 초기화(새 장면 첫 자동채움 허용)
     stopTimer();
+    const cpmLbl = $("cpm").parentElement.querySelector(".lbl");
+    if (cpmLbl) cpmLbl.textContent = "속도";   // 완주 시 바꿨던 라벨 원복
     card.classList.remove("done");
     if (runtrack) runtrack.classList.remove("jog", "run", "sprint", "cleared", "running");
     if (runner) runner.style.transform = "translateX(0px)";
