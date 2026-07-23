@@ -396,7 +396,7 @@
       <button class="btn" id="prevBtn">◂ 이전</button>
       <button class="btn solid" id="nextBtn">다음 ▸</button>
       <button class="btn" id="retryBtn">다시</button>
-      <div class="hint"><kbd>Enter</kbd> 완료 시 다음 · <kbd>Esc</kbd> 현재 다시 · <kbd>Tab</kbd> 입력창 포커스</div>
+      <div class="hint"><kbd>Enter</kbd> 다음(끝까지 쳤으면 오타 있어도) · <kbd>Esc</kbd> 현재 다시 · <kbd>Tab</kbd> 입력창 포커스</div>
     </div>
   </main>
 
@@ -1101,7 +1101,8 @@
     startTimer(); render(); scheduleSaveProgress();
   });
   capture.addEventListener("keydown", (e) => {
-    if (e.key === "Enter") { e.preventDefault(); if (finished) go(1); }
+    // 끝까지 쳤으면 오타가 있어도 다음으로 넘어간다 (완료했으면 그대로, 아니면 건너뛰기)
+    if (e.key === "Enter") { e.preventDefault(); if (finished || capture.value.length >= current().text.length) go(1); }
     else if (e.key === "Escape") { e.preventDefault(); resetCurrent(); }
   });
 
