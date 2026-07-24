@@ -640,7 +640,7 @@
   function buildDisplay(target) {
     let html = "";
     for (let i = 0; i < target.length; i++) {
-      html += '<span class="ch pending">' + escapeHtml(target[i] === " " ? "\u00A0" : target[i]) + '</span>';
+      html += '<span class="ch pending">' + escapeHtml(target[i] === " " ? " " : target[i]) + '</span>';
     }
     display.innerHTML = html;
     dispSpans = Array.prototype.slice.call(display.children);
@@ -657,7 +657,7 @@
     if (c >= 0x20 && c <= 0x7E) return false;      // 기본 ASCII(영문·숫자·문장부호)
     if (c >= 0xAC00 && c <= 0xD7A3) return false;  // 한글 음절
     if (c >= 0x3130 && c <= 0x318F) return false;  // 한글 자모
-    if (ch === " " || ch === " " || ch === "\t") return false;
+    if (ch === " " || ch === " " || ch === "\t") return false;
     return true;
   }
   function autoFillHard(target) {
@@ -692,7 +692,7 @@
         ch = target[i]; cls = "ch pending";
       }
       const sp = dispSpans[i];
-      const text = ch === " " ? "\u00A0" : ch;
+      const text = ch === " " ? " " : ch;
       if (sp._t !== text) { sp.textContent = text; sp._t = text; }
       if (sp._c !== cls) { sp.className = cls; sp._c = cls; }
     }
@@ -702,7 +702,7 @@
     while (extraSpans.length > need) { display.removeChild(extraSpans.pop()); }
     for (let k = 0; k < need; k++) {
       const ch = typed[gl + k];
-      const text = ch === " " ? "\u00A0" : ch;
+      const text = ch === " " ? " " : ch;
       const sp = extraSpans[k];
       if (sp._t !== text) { sp.textContent = text; sp._t = text; }
       if (sp._c !== "ch extra") { sp.className = "ch extra"; sp._c = "ch extra"; }
