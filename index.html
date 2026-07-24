@@ -1463,6 +1463,7 @@
         }
         sentences = norm; clearProgress(); saveSentences(); buildOrder(); resetCurrent(); rebuildMinimap();
         msg.className = "msg ok"; msg.textContent = "저장소 원본 " + norm.length + "개 문단을 불러왔습니다.";
+        setTimeout(() => overlay.classList.remove("open"), 800);   // 불러온 뒤 설정 팝업 닫기
       })
       .catch((err) => {
         msg.className = "msg err";
