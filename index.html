@@ -430,7 +430,7 @@
         <div class="stat"><div class="val" id="time">0.0<small>초</small></div><div class="lbl">시간</div></div>
         <div class="stat"><div class="val" id="strokes">0</div><div class="lbl">누적 타수</div></div>
       </div>
-      <div class="minimap" id="minimap" title="현재 위치 — 클릭하면 이동">
+      <div class="minimap" id="minimap" title="클릭하면 문단 목록" style="cursor:pointer">
         <div class="minimap-label" id="miniLabel">미리보기</div>
         <div class="minimap-scroll" id="miniScroll"><div class="minimap-inner" id="miniInner"></div></div>
       </div>
@@ -453,6 +453,18 @@
       </div>
       <div class="shelf" id="shelf"></div>
       <p class="lib-note">책을 뽑으면 필사가 시작돼요 · 읽다가 <b>📚</b>로 언제든 서재로 · 호버·탭하면 앞표지</p>
+    </div>
+  </div>
+
+  <!-- 장면(문단) 목록 modal — 미니맵 클릭 시 -->
+  <div class="overlay" id="sceneOverlay">
+    <div class="modal list-modal">
+      <div class="lib-top">
+        <h2 id="sceneTitle">문단 목록</h2>
+        <button class="btn" id="sceneCloseBtn">닫기</button>
+      </div>
+      <div class="list-subhead"><span id="sceneSub"></span></div>
+      <div class="list-body" id="sceneList"></div>
     </div>
   </div>
 
@@ -935,24 +947,41 @@
   }
 
   // 미니맵 클릭 → 해당 문단으로 점프
-  minimap.addEventListener("click", (e) => {
-    if (!paraData || !miniIdxs.length) return;
-    const innerRect = miniScroll.getBoundingClientRect();
-    const y = e.clientY - innerRect.top + miniScroll.scrollTop;
-    if (y < 0) { capture.focus(); return; }
-    const scale = miniScale || 1;
-    const paraGap = miniInner._paraGap || 0;
-    const bodyY = y / scale;
-    let acc = 0, pIdx = miniIdxs[miniIdxs.length - 1];
-    for (let k = 0; k < miniIdxs.length; k++) {
-      const idx = miniIdxs[k];
-      const block = paraData[idx].height + (k < miniIdxs.length - 1 ? paraGap : 0);
-      if (bodyY < acc + block) { pIdx = idx; break; }
-      acc += block;
+  // 미니맵을 누르면 현재 작품의 장면(문단) 목록을 펼친다.
+  minimap.addEventListener("click", () => openSceneList());
+  function openSceneList() {
+    const groups = computeGroups();
+    const curPara = order[orderIdx];
+    const g = groups.find((gr) => gr.items.indexOf(curPara) !== -1) || groups[0];
+    if (!g) return;
+    const done = g.items.reduce((n, i) => n + (doneSet.has(i) ? 1 : 0), 0);
+    $("sceneTitle").textContent = g.src || "(제목 없음)";
+    $("sceneSub").textContent = g.items.length + "장 · 완독 " + done;
+    let html = "";
+    for (let s = 0; s < g.items.length; s++) {
+      const i = g.items[s];
+      const t = sentences[i].text;
+      const isCur = i === curPara, isDone = doneSet.has(i);
+      const snippet = t.length > 90 ? t.slice(0, 90) + "…" : t;
+      html += '<button class="list-item' + (isCur ? " current" : "") + (isDone ? " is-done" : "") + '" data-i="' + i + '">'
+            + '<span class="list-num">' + (isDone ? "✓" : (s + 1)) + '</span>'
+            + '<span class="list-text"><span class="list-snippet">' + escapeHtml(snippet) + '</span></span>'
+            + '<span class="list-len">' + t.length + '자</span></button>';
     }
-    const oi = order.indexOf(pIdx);
-    if (oi >= 0 && oi !== orderIdx) { orderIdx = oi; resetCurrent(); }
-    else capture.focus();
+    $("sceneList").innerHTML = html;
+    sceneOverlay.classList.add("open");
+    const cur = $("sceneList").querySelector(".list-item.current");
+    if (cur) cur.scrollIntoView({ block: "center" });
+  }
+  const sceneOverlay = $("sceneOverlay");
+  $("sceneCloseBtn").addEventListener("click", () => sceneOverlay.classList.remove("open"));
+  sceneOverlay.addEventListener("click", (e) => { if (e.target === sceneOverlay) sceneOverlay.classList.remove("open"); });
+  $("sceneList").addEventListener("click", (e) => {
+    const btn = e.target.closest(".list-item"); if (!btn) return;
+    const i = +btn.dataset.i;
+    const oi = order.indexOf(i);
+    if (oi >= 0) { orderIdx = oi; resetCurrent(); saveProgress(); }
+    sceneOverlay.classList.remove("open");
   });
 
   // 리사이즈 시 줄바꿈이 달라지므로 전체 다시 측정
