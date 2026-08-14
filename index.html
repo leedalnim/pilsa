@@ -303,8 +303,8 @@
   /* 서재(책장): 작품을 책등으로, 호버·탭하면 앞표지가 펼쳐짐 */
   .lib-top { display: flex; align-items: center; justify-content: space-between; }
   .lib-note { margin: 14px 2px 0; text-align: center; font-size: 12px; color: var(--paper-mute); line-height: 1.6; }
-  .shelf { display: flex; align-items: flex-end; gap: 12px; padding: 32px 6px 6px; overflow-x: auto; overflow-y: hidden; perspective: 1700px; scrollbar-width: thin; }
-  .shelf::-webkit-scrollbar { height: 6px; }
+  .shelf { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 14px; padding: 16px 6px 8px; max-height: 58vh; overflow-y: auto; overflow-x: hidden; scrollbar-width: thin; }
+  .shelf::-webkit-scrollbar { width: 6px; }
   .shelf::-webkit-scrollbar-thumb { background: var(--line); border-radius: 6px; }
   .book {
     position: relative; flex: 0 0 auto; width: var(--t, 48px); height: var(--h, 240px);
@@ -332,19 +332,23 @@
   .cover-prog i { display: block; height: 100%; background: var(--gold); border-radius: 4px; }
   .cover-meta { font-size: 10.5px; letter-spacing: .05em; opacity: .8; margin: 0 0 12px 8px; font-variant-numeric: tabular-nums; }
   .cover-cta { align-self: flex-start; margin-left: 8px; font-size: 11px; font-weight: 700; letter-spacing: .04em; padding: 7px 14px; border-radius: 999px; background: var(--gold); color: var(--ink); cursor: pointer; }
-  .book-del { position: absolute; top: 8px; right: 8px; width: 22px; height: 22px; border-radius: 6px; border: 1px solid rgba(255,255,255,.3); background: rgba(0,0,0,.32); color: #f2ead7; font-size: 11px; cursor: pointer; opacity: 0; transition: opacity .2s; }
+  .book-del, .book-edit { position: absolute; top: 8px; width: 22px; height: 22px; border-radius: 6px; border: 1px solid rgba(255,255,255,.3); background: rgba(0,0,0,.32); color: #f2ead7; font-size: 11px; cursor: pointer; opacity: 0; transition: opacity .2s; }
+  .book-del { right: 8px; }
+  .book-edit { right: 36px; font-size: 10px; }
   .book-del:hover { border-color: #d4675f; color: #ff9b90; }
-  .book.open { width: var(--cw, 198px); transform: translateY(-14px); }
+  .book-edit:hover { border-color: var(--gold); color: var(--gold); }
+  .book.open .book-edit { opacity: .9; }
+  .book.open { width: var(--cw, 198px); }
   .book.open .spine { opacity: 0; }
   .book.open .done-mark, .book.open .tag, .book.open .spine-foot { display: none; }
   .book.open .cover { opacity: 1; pointer-events: auto; }
   .book.open .book-del { opacity: .9; }
   @media (hover: hover) {
-    .shelf .book:hover { width: var(--cw, 198px); transform: translateY(-14px); }
+    .shelf .book:hover { width: var(--cw, 198px); }
     .shelf .book:hover .spine { opacity: 0; }
     .shelf .book:hover .done-mark, .shelf .book:hover .tag, .shelf .book:hover .spine-foot { display: none; }
     .shelf .book:hover .cover { opacity: 1; pointer-events: auto; }
-    .shelf .book:hover .book-del { opacity: .9; }
+    .shelf .book:hover .book-del, .shelf .book:hover .book-edit { opacity: .9; }
   }
   .book.add { width: 54px; height: 150px; background: transparent; border: 1.5px dashed var(--line); border-radius: 4px; color: var(--paper-mute); box-shadow: none; display: flex; align-items: center; justify-content: center; }
   .book.add:hover { border-color: var(--gold); color: var(--gold); }
@@ -1267,6 +1271,7 @@
             +   (full ? '<span class="done-mark">✓</span>' : '')
             + '</span>'
             + '<span class="cover">'
+            +   '<button class="book-edit" type="button" title="제목·작가 바꾸기" aria-label="이름 바꾸기">✏️</button>'
             +   '<button class="book-del" type="button" title="이 작품 삭제" aria-label="삭제">🗑</button>'
             +   '<span class="cover-top">' + topLabel + (hasTrans ? " · EN" : "") + '</span>'
             +   '<span class="cover-title">' + escapeHtml(title) + '</span>'
@@ -1307,6 +1312,16 @@
     saveSentences(); buildOrder(); orderIdx = 0; resetCurrent(); rebuildMinimap(); saveProgress();
     buildList();
   }
+  function renameWork(gi) {
+    const g = listGroups[gi]; if (!g) return;
+    const next = prompt("작품 이름을 바꿉니다 (예: 제목 · 작가)", g.src);
+    if (next === null) return;
+    const nn = next.trim();
+    if (!nn || nn === g.src) return;
+    const idx = new Set(g.items);
+    sentences.forEach((s, i) => { if (idx.has(i)) s.source = nn; });
+    saveSentences(); rebuildMinimap(); refreshMeta(); buildList();
+  }
   function openLibrary() { buildList(); listOverlay.classList.add("open"); }
   $("listBtn").addEventListener("click", openLibrary);
   $("listCloseBtn").addEventListener("click", () => listOverlay.classList.remove("open"));
@@ -1319,6 +1334,7 @@
     }
     const b = e.target.closest(".book"); if (!b) return;
     const gi = +b.dataset.gi;
+    if (e.target.closest(".book-edit")) { renameWork(gi); return; }
     if (e.target.closest(".book-del")) { deleteWork(gi); return; }
     if (e.target.closest(".cover-cta")) { enterWork(gi); return; }
     if (window.matchMedia && window.matchMedia("(hover:hover)").matches) { enterWork(gi); return; }
